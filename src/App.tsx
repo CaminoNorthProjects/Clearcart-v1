@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { Auth } from './pages/Auth'
 import { BottomNav } from './components/BottomNav'
 
 type TabId = 'home' | 'scan' | 'credits'
@@ -30,8 +32,21 @@ function CreditsView() {
   )
 }
 
-function App() {
+function AppContent() {
+  const { session, loading } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>('home')
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return <Auth />
+  }
 
   const renderContent = () => {
     switch (activeTab) {
@@ -49,6 +64,14 @@ function App() {
       <main className="pb-24 pt-6">{renderContent()}</main>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 
