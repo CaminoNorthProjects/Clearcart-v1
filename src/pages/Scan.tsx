@@ -2,6 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import Tesseract from 'tesseract.js'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import {
+  parseReceiptLines,
+  savePricesToSupabase,
+  type ParsedLineItem,
+} from '../lib/normalize'
+import {
+  fetchCompetitorPrices,
+  type PriceComparison,
+} from '../lib/compare'
 
 export function Scan() {
   const { user } = useAuth()
@@ -14,6 +23,7 @@ export function Scan() {
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [ocrText, setOcrText] = useState<string | null>(null)
+  const [comparisons, setComparisons] = useState<PriceComparison[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -105,6 +115,7 @@ export function Scan() {
     setPreviewUrl(null)
     setCapturedBlob(null)
     setOcrText(null)
+    setComparisons([])
     setStatus('idle')
   }
 
@@ -154,14 +165,35 @@ export function Scan() {
       console.log('4. OCR Complete. Raw text:', text)
       setOcrText(text || null)
 
-      const { error: insertError } = await supabase.from('receipt_scans').insert({
-        user_id: user.id,
-        image_url: publicUrl,
-        raw_text: text || '',
-      })
+      const { data: scanData, error: insertError } = await supabase
+        .from('receipt_scans')
+        .insert({
+          user_id: user.id,
+          image_url: publicUrl,
+          raw_text: text || '',
+        })
+        .select('id')
+        .single()
 
       if (insertError) {
         console.warn('receipt_scans insert warning:', insertError)
+      }
+
+      const receiptScanId = scanData?.id
+      let parsedItems: ParsedLineItem[] = []
+
+      if (receiptScanId && text) {
+        parsedItems = parseReceiptLines(text)
+        const { error: pricesError } = await savePricesToSupabase(
+          parsedItems,
+          receiptScanId
+        )
+        if (pricesError) {
+          console.warn('prices insert warning:', pricesError)
+        }
+
+        const comps = await fetchCompetitorPrices(parsedItems)
+        setComparisons(comps)
       }
 
       setStatus('done')
@@ -252,20 +284,59 @@ export function Scan() {
       )}
 
       {status === 'done' && (
-        <div className="mt-8 w-full max-w-sm text-center">
-          <p className="font-medium text-emerald-600">Receipt scanned successfully.</p>
+        <div className="mt-6 w-full max-w-sm">
+          <p className="text-center font-medium text-emerald-600">
+            Receipt scanned successfully.
+          </p>
+
+          {comparisons.length > 0 ? (
+            <div className="mt-4 max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50">
+              <div className="sticky top-0 border-b border-gray-200 bg-gray-100 px-3 py-2 text-xs font-medium text-gray-600">
+                Comparison List
+              </div>
+              <ul className="divide-y divide-gray-200">
+                {comparisons.map((c, i) => (
+                  <li key={i} className="px-3 py-2">
+                    <p className="text-sm font-medium text-gray-900">{c.item_name}</p>
+                    <div className="mt-1 flex items-center justify-between text-xs">
+                      <span className="text-gray-600">
+                        You paid: ${c.receipt_price.toFixed(2)}
+                      </span>
+                      {c.competitor_price != null ? (
+                        <span
+                          className={
+                            c.savings > 0
+                              ? 'font-medium text-emerald-600'
+                              : 'text-gray-500'
+                          }
+                        >
+                          {c.savings > 0
+                            ? `Save $${c.savings.toFixed(2)} at ${c.store_name}`
+                            : `${c.store_name}: $${c.competitor_price.toFixed(2)}`}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {ocrText && (
-            <div className="mt-4 max-h-32 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-left">
-              <p className="text-xs font-medium text-gray-500">Extracted text (preview)</p>
-              <p className="mt-1 text-sm text-gray-800">
+            <div className="mt-4 max-h-24 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-left">
+              <p className="text-xs font-medium text-gray-500">Raw OCR (preview)</p>
+              <p className="mt-1 text-xs text-gray-700">
                 {ocrText.length > 200 ? `${ocrText.slice(0, 200)}...` : ocrText}
               </p>
             </div>
           )}
+
           <button
             type="button"
             onClick={retake}
-            className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+            className="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
           >
             Scan Another
           </button>
