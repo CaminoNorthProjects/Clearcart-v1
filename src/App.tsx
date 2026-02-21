@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { Auth } from './pages/Auth'
+import { Scan } from './pages/Scan'
 import { BottomNav } from './components/BottomNav'
 
 type TabId = 'home' | 'scan' | 'credits'
@@ -12,14 +13,6 @@ function HomeView() {
       <p className="mt-2 text-gray-600">
         Grocery price advocacy at your fingertips.
       </p>
-    </div>
-  )
-}
-
-function ScanView() {
-  return (
-    <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
-      <p className="text-gray-600">Scan products to compare prices.</p>
     </div>
   )
 }
@@ -53,7 +46,7 @@ function AppContent() {
       case 'home':
         return <HomeView />
       case 'scan':
-        return <ScanView />
+        return <Scan />
       case 'credits':
         return <CreditsView />
     }
