@@ -13,6 +13,7 @@ export function Scan() {
   >('idle')
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [ocrText, setOcrText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -85,6 +86,7 @@ export function Scan() {
     canvas.toBlob(
       (blob) => {
         if (blob) {
+          console.log('1. Image Captured')
           setPreviewUrl((prev) => {
             if (prev) URL.revokeObjectURL(prev)
             return URL.createObjectURL(blob)
@@ -102,6 +104,7 @@ export function Scan() {
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     setPreviewUrl(null)
     setCapturedBlob(null)
+    setOcrText(null)
     setStatus('idle')
   }
 
@@ -115,6 +118,7 @@ export function Scan() {
       const timestamp = Date.now()
       const filename = `${user.id}_${timestamp}.jpg`
 
+      console.log('2. Uploading to Supabase...')
       const { error: uploadError } = await supabase.storage
         .from('receipts')
         .upload(filename, capturedBlob, {
@@ -130,11 +134,25 @@ export function Scan() {
         data: { publicUrl },
       } = supabase.storage.from('receipts').getPublicUrl(filename)
 
+      console.log('3. Starting OCR Worker...')
       const {
         data: { text },
-      } = await Tesseract.recognize(capturedBlob, 'eng')
+      } = await Tesseract.recognize(capturedBlob, 'eng', {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            console.log(`OCR progress: ${(m.progress * 100).toFixed(0)}%`)
+          } else {
+            console.log(
+              'OCR:',
+              m.status,
+              m.progress != null ? `(${(m.progress * 100).toFixed(0)}%)` : ''
+            )
+          }
+        },
+      })
 
-      console.log('[ClearCart OCR] Raw text:', text)
+      console.log('4. OCR Complete. Raw text:', text)
+      setOcrText(text || null)
 
       const { error: insertError } = await supabase.from('receipt_scans').insert({
         user_id: user.id,
@@ -234,11 +252,16 @@ export function Scan() {
       )}
 
       {status === 'done' && (
-        <div className="mt-8 text-center">
+        <div className="mt-8 w-full max-w-sm text-center">
           <p className="font-medium text-emerald-600">Receipt scanned successfully.</p>
-          <p className="mt-2 text-sm text-gray-600">
-            Check the console for raw text. Try another?
-          </p>
+          {ocrText && (
+            <div className="mt-4 max-h-32 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-left">
+              <p className="text-xs font-medium text-gray-500">Extracted text (preview)</p>
+              <p className="mt-1 text-sm text-gray-800">
+                {ocrText.length > 200 ? `${ocrText.slice(0, 200)}...` : ocrText}
+              </p>
+            </div>
+          )}
           <button
             type="button"
             onClick={retake}
