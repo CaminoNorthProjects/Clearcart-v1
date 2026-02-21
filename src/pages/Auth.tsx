@@ -83,7 +83,7 @@ export function Auth() {
         }
 
         setSuccess(
-          'Account created! Check your email to confirm, or sign in if already confirmed.'
+          'Account created successfully! You can now log in.'
         )
       }
     } catch (err: unknown) {
