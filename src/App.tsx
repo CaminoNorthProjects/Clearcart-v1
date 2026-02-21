@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { Auth } from './pages/Auth'
+import { Scan } from './pages/Scan'
 import { BottomNav } from './components/BottomNav'
 
 type TabId = 'home' | 'scan' | 'credits'
@@ -14,14 +17,6 @@ function HomeView() {
   )
 }
 
-function ScanView() {
-  return (
-    <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
-      <p className="text-gray-600">Scan products to compare prices.</p>
-    </div>
-  )
-}
-
 function CreditsView() {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
@@ -30,15 +25,28 @@ function CreditsView() {
   )
 }
 
-function App() {
+function AppContent() {
+  const { session, loading, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>('home')
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return <Auth />
+  }
 
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
         return <HomeView />
       case 'scan':
-        return <ScanView />
+        return <Scan />
       case 'credits':
         return <CreditsView />
     }
@@ -46,9 +54,26 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <main className="pb-24 pt-6">{renderContent()}</main>
+      <header className="flex items-center justify-between px-6 pt-4">
+        <span className="text-sm text-gray-500">{session.user.email}</span>
+        <button
+          onClick={signOut}
+          className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
+        >
+          Sign Out
+        </button>
+      </header>
+      <main className="pb-24 pt-2">{renderContent()}</main>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 
