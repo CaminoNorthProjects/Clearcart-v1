@@ -86,6 +86,7 @@ export function Scan() {
     canvas.toBlob(
       (blob) => {
         if (blob) {
+          console.log('1. Image Captured')
           setPreviewUrl((prev) => {
             if (prev) URL.revokeObjectURL(prev)
             return URL.createObjectURL(blob)
@@ -117,6 +118,7 @@ export function Scan() {
       const timestamp = Date.now()
       const filename = `${user.id}_${timestamp}.jpg`
 
+      console.log('2. Uploading to Supabase...')
       const { error: uploadError } = await supabase.storage
         .from('receipts')
         .upload(filename, capturedBlob, {
@@ -132,11 +134,24 @@ export function Scan() {
         data: { publicUrl },
       } = supabase.storage.from('receipts').getPublicUrl(filename)
 
+      console.log('3. Starting OCR Worker...')
       const {
         data: { text },
-      } = await Tesseract.recognize(capturedBlob, 'eng')
+      } = await Tesseract.recognize(capturedBlob, 'eng', {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            console.log(`OCR progress: ${(m.progress * 100).toFixed(0)}%`)
+          } else {
+            console.log(
+              'OCR:',
+              m.status,
+              m.progress != null ? `(${(m.progress * 100).toFixed(0)}%)` : ''
+            )
+          }
+        },
+      })
 
-      console.log('[ClearCart OCR] Raw text:', text)
+      console.log('4. OCR Complete. Raw text:', text)
       setOcrText(text || null)
 
       const { error: insertError } = await supabase.from('receipt_scans').insert({
