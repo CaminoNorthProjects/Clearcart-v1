@@ -86,8 +86,23 @@ export function Auth() {
           'Account created! Check your email to confirm, or sign in if already confirmed.'
         )
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred.')
+    } catch (err: unknown) {
+      console.error('Auth error:', err)
+      if (err instanceof Error) {
+        if (err.message === 'Failed to fetch' || err.message === 'Load failed') {
+          setError('Unable to connect to the server. Please check your internet connection and try again.')
+        } else {
+          setError(err.message)
+        }
+      } else if (err && typeof err === 'object') {
+        const supaErr = err as Record<string, unknown>
+        const msg = supaErr.message || supaErr.error_description || supaErr.msg
+        const code = supaErr.code || supaErr.status
+        console.error('Supabase error details:', { msg, code, full: supaErr })
+        setError(msg ? String(msg) : `Error (code: ${code || 'unknown'}). Please try again.`)
+      } else {
+        setError('An unexpected error occurred. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
