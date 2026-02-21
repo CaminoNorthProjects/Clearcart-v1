@@ -16,12 +16,14 @@ ClearCart is a grocery price advocacy web application built with React, Vite, Ta
 - `src/App.tsx` — Main app with auth gate and tab-based views
 - `src/contexts/AuthContext.tsx` — Auth context provider (session persistence, throws if used outside provider)
 - `src/pages/Auth.tsx` — Login/signup with name and Vancouver postal code validation
-- `src/pages/Scan.tsx` — Receipt scanner with camera, Supabase upload, and OCR
+- `src/pages/Scan.tsx` — Receipt scanner with camera, upload, OCR, normalization, comparison UI
+- `src/lib/normalize.ts` — OCR parsing (parseReceiptLines, savePricesToSupabase)
+- `src/lib/compare.ts` — Competitor price fetcher (mock for MVP)
 - `src/components/BottomNav.tsx` — Bottom navigation component
 - `src/lib/supabase.ts` — Supabase client
-- `src/index.css` — Tailwind CSS entry
-- `supabase/receipts-bucket-policies.sql` — SQL for storage RLS policies
-- `.env.example` — Template for environment variables
+- `supabase/receipts-bucket-policies.sql` — Storage RLS policies
+- `supabase/add-receipt-scan-id-to-prices.sql` — Phase 4 migration (receipt_scan_id, RLS)
+- `REPLIT_PROMPTS.md` — Alignment prompts for Replit AI
 
 ## Environment Variables
 - `VITE_SUPABASE_URL` — Supabase project URL (set as shared env var)
@@ -35,22 +37,25 @@ ClearCart is a grocery price advocacy web application built with React, Vite, Ta
 - Email confirmation should be disabled in Supabase
 - Sessions persist via Supabase Auth
 
-## Scan Flow (Phase 3)
+## Scan Flow (Phase 3 + 4)
 - Camera permission prompt via getUserMedia (rear camera preferred, front fallback)
 - HTTPS check before attempting camera access
 - Preview captured photo before upload
 - Upload to Supabase Storage `receipts` bucket (flat file naming: userId_timestamp.jpg)
 - Client-side OCR via `Tesseract.recognize(blob, 'eng')`
-- Raw OCR text logged to console as `[ClearCart OCR] Raw text:`
-- Results saved to `receipt_scans` table
+- Raw OCR text logged to console (browser DevTools, not Replit terminal)
+- Insert into `receipt_scans` with `.select('id').single()` to capture receipt_scan_id
+- Phase 4: `parseReceiptLines` → `savePricesToSupabase` → `fetchCompetitorPrices` → Comparison UI
 
 ## Supabase Setup Required
 1. Disable email confirmation: Authentication > Providers > Email > toggle off "Confirm email"
 2. Create `profiles` table (id uuid PK refs auth.users, full_name text, postal_code text, created_at timestamptz)
 3. Create `receipt_scans` table (id uuid PK, user_id uuid refs auth.users, image_url text, raw_text text, created_at timestamptz)
-4. Enable RLS on both tables with appropriate policies
-5. Create `receipts` storage bucket: Storage > New bucket > name: receipts > Public: ON
-6. Run `supabase/receipts-bucket-policies.sql` in SQL Editor (creates storage RLS policies)
+4. Create `prices` table (id, item_name, price, unit, store_name, is_delivery_app_price, scanned_at)
+5. Run `supabase/add-receipt-scan-id-to-prices.sql` (adds receipt_scan_id, RLS for prices)
+6. Enable RLS on profiles and receipt_scans with appropriate policies
+7. Create `receipts` storage bucket: Storage > New bucket > name: receipts > Public: ON
+8. Run `supabase/receipts-bucket-policies.sql` in SQL Editor (storage RLS policies)
 
 ## Development
 - Dev server: `npm run dev` (port 5000)
@@ -62,7 +67,11 @@ ClearCart is a grocery price advocacy web application built with React, Vite, Ta
 ## GitHub Repo
 - https://github.com/CaminoNorthProjects/Clearcart-v1
 
+## Replit AI Alignment
+See `REPLIT_PROMPTS.md` for copy-paste prompts to ensure alignment with Cursor and project conventions.
+
 ## Recent Changes
+- 2026-02-20: Phase 4 — normalize.ts, compare.ts, receipt_scan_id migration, Comparison UI
 - 2026-02-21: Synced all files to match GitHub origin/main
 - 2026-02-21: AuthContext now throws error if useAuth called outside provider
 - 2026-02-21: Auth page uses signUp options metadata, onConflict upsert, success message
