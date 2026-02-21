@@ -1,7 +1,4 @@
 import { useState } from 'react'
-import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { Auth } from './pages/Auth'
-import { Scan } from './pages/Scan'
 import { BottomNav } from './components/BottomNav'
 
 type TabId = 'home' | 'scan' | 'credits'
@@ -17,6 +14,14 @@ function HomeView() {
   )
 }
 
+function ScanView() {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+      <p className="text-gray-600">Scan products to compare prices.</p>
+    </div>
+  )
+}
+
 function CreditsView() {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
@@ -25,28 +30,15 @@ function CreditsView() {
   )
 }
 
-function AppContent() {
-  const { session, loading } = useAuth()
+function App() {
   const [activeTab, setActiveTab] = useState<TabId>('home')
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-gray-600">Loading...</p>
-      </div>
-    )
-  }
-
-  if (!session) {
-    return <Auth />
-  }
 
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
         return <HomeView />
       case 'scan':
-        return <Scan />
+        return <ScanView />
       case 'credits':
         return <CreditsView />
     }
@@ -57,14 +49,6 @@ function AppContent() {
       <main className="pb-24 pt-6">{renderContent()}</main>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
-  )
-}
-
-function App() {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
   )
 }
 
