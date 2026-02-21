@@ -17,6 +17,7 @@ function HomeView() {
   )
 }
 
+
 function CreditsView() {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
@@ -26,7 +27,7 @@ function CreditsView() {
 }
 
 function AppContent() {
-  const { session, loading, signOut } = useAuth()
+  const { session, loading } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>('home')
 
   if (loading) {
@@ -54,16 +55,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="flex items-center justify-between px-6 pt-4">
-        <span className="text-sm text-gray-500">{session.user.email}</span>
-        <button
-          onClick={signOut}
-          className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
-        >
-          Sign Out
-        </button>
-      </header>
-      <main className="pb-24 pt-2">{renderContent()}</main>
+      <main className="pb-24 pt-6">{renderContent()}</main>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   )
