@@ -12,6 +12,9 @@ export interface PriceComparison {
 /** Estimated delivery app markup (15-20%). Used for "Advocacy Gap" display. */
 export const DELIVERY_MARKUP_PERCENT = 0.18
 
+/** Threshold for "Questionable Sale" advocacy alert: receipt >20% over market. */
+export const ADVOCACY_THRESHOLD_PERCENT = 0.2
+
 export type CompetitorFetcher = (
   items: ParsedLineItem[]
 ) => Promise<PriceComparison[]>

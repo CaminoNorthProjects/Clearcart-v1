@@ -1,11 +1,24 @@
-import type { PriceComparison } from '../lib/compare'
+import { useState } from 'react'
+import {
+  type PriceComparison,
+  ADVOCACY_THRESHOLD_PERCENT,
+} from '../lib/compare'
+import { useToast } from '../contexts/ToastContext'
 
 interface ComparisonCardProps {
   comparisons: PriceComparison[]
 }
 
 export function ComparisonCard({ comparisons }: ComparisonCardProps) {
+  const [sharedItems, setSharedItems] = useState<Set<number>>(new Set())
+  const { showToast } = useToast()
+
   if (comparisons.length === 0) return null
+
+  const handleShare = (index: number) => {
+    setSharedItems((prev) => new Set(prev).add(index))
+    showToast('Price flagged for the Vancouver community')
+  }
 
   return (
     <div className="mt-4 max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50">
@@ -15,8 +28,13 @@ export function ComparisonCard({ comparisons }: ComparisonCardProps) {
       <ul className="divide-y divide-gray-200">
         {comparisons.map((c, i) => {
           const isSavings = c.competitor_price != null && c.savings > 0
+          const overMarketPercent =
+            c.competitor_price != null && c.competitor_price > 0
+              ? (c.receipt_price - c.competitor_price) / c.competitor_price
+              : 0
           const isQuestionable =
-            c.competitor_price != null && c.competitor_price > c.receipt_price
+            c.competitor_price != null &&
+            overMarketPercent >= ADVOCACY_THRESHOLD_PERCENT
           const rowBg = isSavings
             ? 'bg-emerald-50'
             : isQuestionable
@@ -50,6 +68,20 @@ export function ComparisonCard({ comparisons }: ComparisonCardProps) {
                   <span className="text-gray-400">—</span>
                 )}
               </div>
+              {isQuestionable && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleShare(i)}
+                    disabled={sharedItems.has(i)}
+                    className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                  >
+                    {sharedItems.has(i)
+                      ? 'Flagged for community (simulated)'
+                      : 'Share to Community'}
+                  </button>
+                </div>
+              )}
             </li>
           )
         })}

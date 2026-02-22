@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { ToastProvider } from './contexts/ToastContext'
 import { Auth } from './pages/Auth'
 import { Scan } from './pages/Scan'
+import { Credits } from './pages/Credits'
 import { BottomNav } from './components/BottomNav'
 
 type TabId = 'home' | 'scan' | 'credits'
@@ -18,13 +20,6 @@ function HomeView() {
 }
 
 
-function CreditsView() {
-  return (
-    <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
-      <p className="text-gray-600">Credits and acknowledgments.</p>
-    </div>
-  )
-}
 
 function AppContent() {
   const { session, loading } = useAuth()
@@ -52,7 +47,7 @@ function AppContent() {
           <Scan />
         </div>
         <div className={activeTab === 'credits' ? '' : 'hidden'}>
-          <CreditsView />
+          <Credits isVisible={activeTab === 'credits'} />
         </div>
       </main>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
@@ -63,7 +58,9 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </AuthProvider>
   )
 }

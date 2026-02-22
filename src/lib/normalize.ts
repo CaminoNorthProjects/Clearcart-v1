@@ -1,5 +1,60 @@
 import { supabase } from './supabase'
 
+/** Vancouver Local Gems — 25 credits. Map search term to display name. */
+const LOCAL_GEMS: [string, string][] = [
+  ['aria', 'Aria'],
+  ["kin's", "Kin's Market"],
+  ['kins market', "Kin's Market"],
+  ["donald's", "Donald's Market"],
+  ['donalds market', "Donald's Market"],
+  ['persia foods', 'Persia Foods'],
+  ['famous foods', 'Famous Foods'],
+  ['sunrise market', 'Sunrise Market'],
+  ["stong's", "Stong's"],
+  ['stongs', "Stong's"],
+]
+
+export interface StoreExtraction {
+  store_name: string | null
+  store_type: 'Local Gem' | 'Standard'
+}
+
+/**
+ * Extract store name and type from OCR text.
+ * Checks first ~10 lines for known chains vs Local Gems.
+ */
+export function extractStoreFromOcr(rawText: string): StoreExtraction {
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((l) => l.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 10)
+
+  const fullText = lines.join(' ')
+
+  for (const [search, displayName] of LOCAL_GEMS) {
+    if (fullText.includes(search)) {
+      return {
+        store_name: displayName,
+        store_type: 'Local Gem',
+      }
+    }
+  }
+
+  // Default: Standard (major chain or unknown)
+  const chainPatterns = [
+    /\b(loblaws|superstore|real canadian|save[- ]?on|safeway|walmart|costco|whole foods|t&t|tnt)\b/i,
+  ]
+  for (const re of chainPatterns) {
+    const m = fullText.match(re)
+    if (m) {
+      return { store_name: m[1], store_type: 'Standard' }
+    }
+  }
+
+  return { store_name: null, store_type: 'Standard' }
+}
+
 export interface ParsedLineItem {
   item_name: string
   price: number

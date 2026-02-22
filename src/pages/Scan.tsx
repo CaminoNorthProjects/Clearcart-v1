@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import Tesseract from 'tesseract.js'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../lib/supabase'
 import {
+  extractStoreFromOcr,
   parseReceiptLines,
   savePricesToSupabase,
   type ParsedLineItem,
 } from '../lib/normalize'
+import { awardCredits } from '../lib/credits'
 import {
   fetchCompetitorPrices,
   type PriceComparison,
@@ -15,6 +18,7 @@ import { ComparisonCard } from '../components/ComparisonCard'
 
 export function Scan() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
@@ -166,12 +170,16 @@ export function Scan() {
       console.log('4. OCR Complete. Raw text:', text)
       setOcrText(text || null)
 
+      const { store_name, store_type } = extractStoreFromOcr(text || '')
+
       const { data: scanData, error: insertError } = await supabase
         .from('receipt_scans')
         .insert({
           user_id: user.id,
           image_url: publicUrl,
           raw_text: text || '',
+          store_name: store_name ?? undefined,
+          store_type: store_type,
         })
         .select('id')
         .single()
@@ -187,7 +195,8 @@ export function Scan() {
         parsedItems = parseReceiptLines(text)
         const { error: pricesError } = await savePricesToSupabase(
           parsedItems,
-          receiptScanId
+          receiptScanId,
+          store_name ?? undefined
         )
         if (pricesError) {
           console.warn('prices insert warning:', pricesError)
@@ -196,6 +205,11 @@ export function Scan() {
         setStatus('scanning_market')
         const comps = await fetchCompetitorPrices(parsedItems)
         setComparisons(comps)
+
+        const { credits } = await awardCredits(receiptScanId)
+        if (credits > 0) {
+          showToast(`Success! +${credits} ClearCredits added`)
+        }
       }
 
       setStatus('done')
