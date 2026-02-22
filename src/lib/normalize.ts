@@ -16,6 +16,11 @@ export function normalizeOcrErrors(text: string): string {
     .replace(/\bl(\d+)\b/g, '1$1') // l49 → 149 (ambiguous, use sparingly)
 }
 
+/** Strip Vancouver tax markers (G=GST, P=PST, H=HST) from text before price/item extraction */
+function stripTaxMarkers(text: string): string {
+  return text.replace(/\s*[GPH]\b/gi, '')
+}
+
 /**
  * Parse raw OCR text into line items with item_name, price, quantity.
  * Handles common receipt formats: "MILK 2% 4.99", "1.49 BREAD", "$12.50 TOTAL"
@@ -48,34 +53,59 @@ export function parseReceiptLines(rawText: string): ParsedLineItem[] {
   const lines = normalized.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
 
   for (const line of lines) {
-    const prices = line.match(/(\$?\d+\.?\d{0,2})/g)
+    const cleaned = stripTaxMarkers(line)
+
+    // Weighted items: "2.5kg @ 1.99/kg" - extract unit price for comparison
+    const weightedMatch = cleaned.match(
+      /(\d+\.?\d*)\s*kg\s*@\s*(\d+\.?\d{0,2})\s*\/?\s*kg/i
+    )
+    if (weightedMatch) {
+      const qty = parseFloat(weightedMatch[1])
+      const unitPrice = parseFloat(weightedMatch[2])
+      if (!isNaN(qty) && !isNaN(unitPrice) && unitPrice > 0 && unitPrice < 1000) {
+        const itemName = cleaned
+          .replace(weightedMatch[0], '')
+          .replace(/\s+/g, ' ')
+          .trim() || `Item ${items.length + 1}`
+        const key = `${itemName}|${unitPrice}|${qty}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          items.push({ item_name: itemName, price: unitPrice, quantity: qty })
+        }
+      }
+      continue
+    }
+
+    const prices = cleaned.match(/(\$?\d+\.?\d{0,2})/g)
     if (!prices || prices.length === 0) continue
 
-    // Use last price as item price (receipts often have qty x price at end)
     const lastPriceStr = prices[prices.length - 1].replace('$', '')
     const price = parseFloat(lastPriceStr)
-    if (isNaN(price) || price <= 0 || price > 99999) continue
+    if (isNaN(price) || price <= 0 || price > 9999) continue
 
-    // Extract item name: everything before the last price, cleaned
-    const lastPriceIndex = line.lastIndexOf(prices[prices.length - 1])
-    let itemName = line
+    // Skip date-like patterns (DD.MM or MM.DD when both <= 31)
+    const [intPart, decPart] = lastPriceStr.split('.')
+    const a = parseInt(intPart || '0', 10)
+    const b = parseInt(decPart || '0', 10)
+    if (a <= 31 && b <= 31 && decPart && decPart.length <= 2) continue
+
+    const lastPriceIndex = cleaned.lastIndexOf(prices[prices.length - 1])
+    let itemName = cleaned
       .slice(0, lastPriceIndex)
       .replace(/\$?\d+\.?\d{0,2}/g, '')
+      .replace(/\s*[GPH]\b/gi, '')
       .replace(/\s+/g, ' ')
       .trim()
 
-    // Skip if name looks like a total/subtotal
     if (skipPatterns.some((p) => p.test(itemName))) continue
     if (itemName.length < 2) itemName = `Item ${items.length + 1}`
 
-    // Dedupe by name+price
     const key = `${itemName}|${price}`
     if (seen.has(key)) continue
     seen.add(key)
 
-    // Quantity: first number if pattern "2 x 4.99" or "2 @ 4.99"
     let quantity = 1
-    const qtyMatch = line.match(/^(\d+)\s*[xX@]\s*/)
+    const qtyMatch = cleaned.match(/^(\d+)\s*[xX@]\s*/)
     if (qtyMatch) {
       quantity = parseInt(qtyMatch[1], 10) || 1
     }

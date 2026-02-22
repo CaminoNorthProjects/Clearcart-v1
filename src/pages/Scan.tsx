@@ -11,6 +11,7 @@ import {
   fetchCompetitorPrices,
   type PriceComparison,
 } from '../lib/compare'
+import { ComparisonCard } from '../components/ComparisonCard'
 
 export function Scan() {
   const { user } = useAuth()
@@ -18,7 +19,7 @@ export function Scan() {
   const streamRef = useRef<MediaStream | null>(null)
 
   const [status, setStatus] = useState<
-    'idle' | 'camera' | 'preview' | 'uploading' | 'done' | 'error'
+    'idle' | 'camera' | 'preview' | 'uploading' | 'scanning_market' | 'done' | 'error'
   >('idle')
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -192,6 +193,7 @@ export function Scan() {
           console.warn('prices insert warning:', pricesError)
         }
 
+        setStatus('scanning_market')
         const comps = await fetchCompetitorPrices(parsedItems)
         setComparisons(comps)
       }
@@ -283,46 +285,22 @@ export function Scan() {
         </div>
       )}
 
+      {status === 'scanning_market' && (
+        <div className="mt-8 text-center">
+          <p className="text-gray-600">Scanning Market...</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Comparing prices with Superstore
+          </p>
+        </div>
+      )}
+
       {status === 'done' && (
         <div className="mt-6 w-full max-w-sm">
           <p className="text-center font-medium text-emerald-600">
             Receipt scanned successfully.
           </p>
 
-          {comparisons.length > 0 ? (
-            <div className="mt-4 max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50">
-              <div className="sticky top-0 border-b border-gray-200 bg-gray-100 px-3 py-2 text-xs font-medium text-gray-600">
-                Comparison List
-              </div>
-              <ul className="divide-y divide-gray-200">
-                {comparisons.map((c, i) => (
-                  <li key={i} className="px-3 py-2">
-                    <p className="text-sm font-medium text-gray-900">{c.item_name}</p>
-                    <div className="mt-1 flex items-center justify-between text-xs">
-                      <span className="text-gray-600">
-                        You paid: ${c.receipt_price.toFixed(2)}
-                      </span>
-                      {c.competitor_price != null ? (
-                        <span
-                          className={
-                            c.savings > 0
-                              ? 'font-medium text-emerald-600'
-                              : 'text-gray-500'
-                          }
-                        >
-                          {c.savings > 0
-                            ? `Save $${c.savings.toFixed(2)} at ${c.store_name}`
-                            : `${c.store_name}: $${c.competitor_price.toFixed(2)}`}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          <ComparisonCard comparisons={comparisons} />
 
           {ocrText && (
             <div className="mt-4 max-h-24 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-left">

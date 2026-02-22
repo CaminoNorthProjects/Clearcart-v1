@@ -42,20 +42,19 @@ function AppContent() {
     return <Auth />
   }
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'home':
-        return <HomeView />
-      case 'scan':
-        return <Scan />
-      case 'credits':
-        return <CreditsView />
-    }
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
-      <main className="pb-24 pt-6">{renderContent()}</main>
+      <main className="pb-24 pt-6">
+        <div className={activeTab === 'home' ? '' : 'hidden'}>
+          <HomeView />
+        </div>
+        <div className={activeTab === 'scan' ? '' : 'hidden'}>
+          <Scan />
+        </div>
+        <div className={activeTab === 'credits' ? '' : 'hidden'}>
+          <CreditsView />
+        </div>
+      </main>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   )

@@ -1,17 +1,19 @@
 # Replit Alignment Prompts
 
-Copy-paste these prompts when working with Replit AI or onboarding. They ensure alignment with Cursor (Logic Lab) and the ClearCart pipeline.
+Use these prompts in order when entering Replit. They ensure alignment with Cursor (Logic Lab) and the ClearCart pipeline.
 
 ---
 
-## 1. Project Context (Use First)
+## 1. Quick Start (Paste First When Opening Replit)
 
 ```
-ClearCart is a grocery price advocacy app for a 20-day launch. Pipeline: Cursor (logic), GitHub (version control), Replit (hosting), Supabase (DB/Auth).
+ClearCart: Cursor (logic) → GitHub → Replit (hosting). Stack: React 19, Vite 7, TS, Tailwind v4.
 
-Stack: React 19, Vite 7, TypeScript, Tailwind CSS v4. Mobile-first UI with bottom nav: Home, Scan, Credits. Emerald/gray aesthetic.
+First: git pull origin main. If Phase 4 files (normalize.ts, compare.ts) are missing, they're in the repo — pull to get them.
 
-Key files: src/pages/ (Auth, Scan, Home, Credits), src/lib/ (supabase, normalize, compare), src/contexts/AuthContext. Build output: dist/.
+After pull: Restore vite.config server (host 0.0.0.0, port 5000, allowedHosts: true) if needed.
+
+Supabase: Ensure prices table exists and add-receipt-scan-id-to-prices.sql has been run.
 ```
 
 ---
@@ -28,7 +30,19 @@ After editing: Commit and push so Cursor has the latest. Never force-push withou
 
 ---
 
-## 3. Phase 4 — If Files Are Missing
+## 3. Project Context
+
+```
+ClearCart is a grocery price advocacy app for a 20-day launch. Pipeline: Cursor (logic), GitHub (version control), Replit (hosting), Supabase (DB/Auth).
+
+Stack: React 19, Vite 7, TypeScript, Tailwind CSS v4. Mobile-first UI with bottom nav: Home, Scan, Credits. Emerald/gray aesthetic.
+
+Key files: src/pages/ (Auth, Scan, Home, Credits), src/lib/ (supabase, normalize, compare), src/contexts/AuthContext. Build output: dist/.
+```
+
+---
+
+## 4. Phase 4 — If Files Are Missing
 
 ```
 Phase 4 is already built in Cursor and pushed to GitHub. Do NOT rebuild from scratch.
@@ -40,7 +54,7 @@ If pull causes merge conflicts, resolve by keeping origin/main version for confl
 
 ---
 
-## 4. Phase 4 Context (Data Normalization — When Present)
+## 5. Phase 4 Context (Data Normalization — When Present)
 
 ```
 Phase 4 flow: Capture → Upload → OCR → Insert receipt_scans → parseReceiptLines → savePricesToSupabase → fetchCompetitorPrices → Comparison UI.
@@ -52,7 +66,7 @@ Phase 4 flow: Capture → Upload → OCR → Insert receipt_scans → parseRecei
 
 ---
 
-## 5. Supabase Setup (Full Checklist)
+## 6. Supabase Setup (Full Checklist)
 
 ```
 1. profiles table — Done
@@ -74,7 +88,7 @@ Phase 4 flow: Capture → Upload → OCR → Insert receipt_scans → parseRecei
 
 ---
 
-## 6. Debugging Scan/OCR
+## 7. Debugging Scan/OCR
 
 ```
 console.log from React runs in the browser, not Replit's terminal. To see OCR logs: use desktop + DevTools (F12) > Console, or rely on the on-screen OCR preview in the Scan done state.
@@ -82,24 +96,10 @@ console.log from React runs in the browser, not Replit's terminal. To see OCR lo
 
 ---
 
-## 7. Quality Gate #4 Verification
+## 8. Quality Gate #4 Verification
 
 ```
 (1) Items in Supabase prices table with receipt_scan_id
 (2) Comparison List visible in Scan done UI
 (3) At least one "Save $X.XX at Superstore (est.)" shown
-```
-
----
-
-## 8. Quick Start (Paste When Opening Replit)
-
-```
-ClearCart: Cursor (logic) → GitHub → Replit (hosting). Stack: React 19, Vite 7, TS, Tailwind v4.
-
-First: git pull origin main. If Phase 4 files (normalize.ts, compare.ts) are missing, they're in the repo — pull to get them.
-
-After pull: Restore vite.config server (host 0.0.0.0, port 5000, allowedHosts: true) if needed.
-
-Supabase: Ensure prices table exists and add-receipt-scan-id-to-prices.sql has been run.
 ```

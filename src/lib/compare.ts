@@ -1,4 +1,5 @@
 import type { ParsedLineItem } from './normalize'
+import { fetchCompetitorPricesFromMarket } from './marketApi'
 
 export interface PriceComparison {
   item_name: string
@@ -11,35 +12,57 @@ export interface PriceComparison {
 /** Estimated delivery app markup (15-20%). Used for "Advocacy Gap" display. */
 export const DELIVERY_MARKUP_PERCENT = 0.18
 
-/**
- * Mock fetcher: returns competitor prices for demo/MVP.
- * Replace with Statistics Canada, Open Food Facts, or Apify when ready.
- * Simulates "competitor is 5-15% cheaper" for some items.
- */
-export async function fetchCompetitorPrices(
+export type CompetitorFetcher = (
+  items: ParsedLineItem[]
+) => Promise<PriceComparison[]>
+
+function mockFetcher(items: ParsedLineItem[]): Promise<PriceComparison[]> {
+  return Promise.resolve(
+    items.map((item) => {
+      const receiptPrice = item.price * item.quantity
+      const hasCompetitor = Math.random() < 0.7
+      const discount = hasCompetitor ? 0.05 + Math.random() * 0.1 : 0
+      const competitorPrice = hasCompetitor
+        ? Math.round(receiptPrice * (1 - discount) * 100) / 100
+        : null
+      const savings =
+        competitorPrice != null && competitorPrice < receiptPrice
+          ? Math.round((receiptPrice - competitorPrice) * 100) / 100
+          : 0
+
+      return {
+        item_name: item.item_name,
+        receipt_price: receiptPrice,
+        competitor_price: competitorPrice,
+        savings,
+        store_name: 'Superstore (est.)',
+      }
+    })
+  )
+}
+
+const useRealPrices =
+  import.meta.env.VITE_USE_REAL_PRICES === 'true' ||
+  import.meta.env.VITE_USE_REAL_PRICES === '1'
+
+const useMockPrices =
+  import.meta.env.VITE_USE_MOCK_PRICES === 'true' ||
+  import.meta.env.VITE_USE_MOCK_PRICES === '1'
+
+async function fetchCompetitorPricesImpl(
   items: ParsedLineItem[]
 ): Promise<PriceComparison[]> {
-  return items.map((item) => {
-    const receiptPrice = item.price * item.quantity
-    // Simulate: ~70% of items have a "competitor" price, often 5-12% lower
-    const hasCompetitor = Math.random() < 0.7
-    const discount = hasCompetitor ? 0.05 + Math.random() * 0.1 : 0
-    const competitorPrice = hasCompetitor
-      ? Math.round(receiptPrice * (1 - discount) * 100) / 100
-      : null
-    const savings = competitorPrice != null && competitorPrice < receiptPrice
-      ? Math.round((receiptPrice - competitorPrice) * 100) / 100
-      : 0
-
-    return {
-      item_name: item.item_name,
-      receipt_price: receiptPrice,
-      competitor_price: competitorPrice,
-      savings,
-      store_name: 'Superstore (est.)',
-    }
-  })
+  if (useMockPrices) {
+    return mockFetcher(items)
+  }
+  if (useRealPrices) {
+    const { openFoodFactsFetcher } = await import('./fetchers/openFoodFacts')
+    return openFoodFactsFetcher(items)
+  }
+  return Promise.resolve(fetchCompetitorPricesFromMarket(items))
 }
+
+export const fetchCompetitorPrices: CompetitorFetcher = fetchCompetitorPricesImpl
 
 /**
  * Calculate estimated delivery markup for advocacy gap display

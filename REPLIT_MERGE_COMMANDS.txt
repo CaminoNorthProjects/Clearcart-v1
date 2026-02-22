@@ -1,0 +1,10 @@
+# Run these commands in Replit Shell to resolve merge conflicts
+
+# Accept origin/main (GitHub) version for all conflicted files:
+git checkout --theirs src/lib/supabase.ts && git add src/lib/supabase.ts
+git checkout --theirs src/pages/Scan.tsx && git add src/pages/Scan.tsx
+git checkout --theirs vite.config.ts && git add vite.config.ts
+
+# Commit and push:
+git commit -m "Merge Replit and GitHub histories"
+git push origin main
