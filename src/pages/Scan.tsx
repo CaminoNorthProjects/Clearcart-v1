@@ -21,6 +21,7 @@ export function Scan() {
   const { showToast } = useToast()
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const uploadingRef = useRef(false)
 
   const [status, setStatus] = useState<
     'idle' | 'camera' | 'preview' | 'uploading' | 'scanning_market' | 'done' | 'error'
@@ -90,12 +91,24 @@ export function Scan() {
 
     const video = videoRef.current
     const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    ctx.drawImage(video, 0, 0)
+    const MAX_DIM = 1200
+    let w = video.videoWidth
+    let h = video.videoHeight
+    if (w > MAX_DIM || h > MAX_DIM) {
+      if (w > h) {
+        h = Math.round((h * MAX_DIM) / w)
+        w = MAX_DIM
+      } else {
+        w = Math.round((w * MAX_DIM) / h)
+        h = MAX_DIM
+      }
+    }
+    canvas.width = w
+    canvas.height = h
+    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, w, h)
     stopCamera()
 
     canvas.toBlob(
@@ -111,7 +124,7 @@ export function Scan() {
         }
       },
       'image/jpeg',
-      0.9
+      0.85
     )
   }
 
@@ -126,6 +139,8 @@ export function Scan() {
 
   const uploadAndOcr = async () => {
     if (!capturedBlob || !user) return
+    if (uploadingRef.current) return
+    uploadingRef.current = true
 
     setError(null)
     setStatus('uploading')
@@ -216,6 +231,8 @@ export function Scan() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload or OCR failed.')
       setStatus('error')
+    } finally {
+      uploadingRef.current = false
     }
   }
 
