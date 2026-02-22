@@ -118,9 +118,16 @@ export function Credits({ isVisible }: { isVisible: boolean }) {
                         {formatDate(scan.created_at)}
                       </p>
                     </div>
-                    <span className="text-sm font-medium text-emerald-600">
-                      +{scan.credits_awarded}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {scan.store_type === 'Local Gem' && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          Local Gem
+                        </span>
+                      )}
+                      <span className="text-sm font-medium text-emerald-600">
+                        +{scan.credits_awarded}
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>
