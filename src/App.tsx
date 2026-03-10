@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ToastProvider } from './contexts/ToastContext'
+import { ProfileProvider } from './contexts/ProfileContext'
 import { Auth } from './pages/Auth'
 import { Scan } from './pages/Scan'
 import { Profile } from './pages/Profile'
@@ -131,7 +132,9 @@ function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <AppContent />
+        <ProfileProvider>
+          <AppContent />
+        </ProfileProvider>
       </ToastProvider>
     </AuthProvider>
   )

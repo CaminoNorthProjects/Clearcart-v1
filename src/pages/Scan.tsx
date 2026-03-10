@@ -14,6 +14,7 @@ import {
   type PriceComparison,
 } from '../lib/compare'
 import { ComparisonCard } from '../components/ComparisonCard'
+import { useTripleConstraint, type StoreResult } from '../lib/tripleConstraint'
 
 const API_URL = import.meta.env.VITE_API_URL as string | undefined
 const USE_GEMINI = !!API_URL
@@ -56,6 +57,7 @@ export function Scan() {
   const [ocrText, setOcrText] = useState<string | null>(null)
   const [comparisons, setComparisons] = useState<PriceComparison[]>([])
   const [error, setError] = useState<string | null>(null)
+  const { stores: tcStores, run: runTripleConstraint } = useTripleConstraint()
 
   useEffect(() => {
     return () => {
@@ -228,6 +230,14 @@ export function Scan() {
 
         const { credits } = await awardCredits(receiptScanId)
         if (credits > 0) showToast(`Success! +${credits} ClearCredits added`)
+
+        // Run Triple Constraint engine in parallel (non-blocking)
+        const itemNames = parsedItems.map((i) => i.item_name).filter(Boolean)
+        if (itemNames.length > 0) {
+          runTripleConstraint(itemNames).catch((err) =>
+            console.warn('Triple Constraint error:', err)
+          )
+        }
       }
 
       setStatus('done')
@@ -331,6 +341,8 @@ export function Scan() {
 
           <ComparisonCard comparisons={comparisons} />
 
+          {tcStores.length > 0 && <TripleConstraintPanel stores={tcStores} />}
+
           {ocrText && (
             <div className="mt-4 max-h-24 overflow-y-auto rounded-xl border border-midnight-navy/10 bg-white p-3 text-left">
               <p className="text-xs font-semibold text-midnight-navy/40">Raw OCR (preview)</p>
@@ -364,6 +376,85 @@ export function Scan() {
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Triple Constraint Results Panel
+// ---------------------------------------------------------------------------
+
+function TripleConstraintPanel({ stores }: { stores: StoreResult[] }) {
+  const cheapest = stores[0]
+  const mostExpensive = stores[stores.length - 1]
+  const savings =
+    stores.length > 1
+      ? (mostExpensive.running_total - cheapest.running_total).toFixed(2)
+      : null
+
+  return (
+    <div className="mt-4 rounded-xl border border-midnight-navy/10 bg-white overflow-hidden">
+      <div className="border-b border-midnight-navy/10 bg-cream px-3 py-2 text-xs font-semibold uppercase tracking-wide text-midnight-navy/50">
+        Store Comparison (Triple Constraint)
+      </div>
+
+      {savings && (
+        <div className="mx-3 mt-3 rounded-lg bg-sunset-red px-3 py-2 text-sm font-semibold text-white">
+          Buying at {cheapest.store_name} saves you ${savings} vs. most expensive option
+        </div>
+      )}
+
+      <ul className="divide-y divide-midnight-navy/10 mt-2">
+        {stores.slice(0, 5).map((store, i) => (
+          <li key={store.store_name} className="px-3 py-2.5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-semibold text-midnight-navy">
+                  {i === 0 && <span className="mr-1 text-emerald-600">★</span>}
+                  {store.store_name}
+                </p>
+                {store.transit_time_minutes != null && (
+                  <p className="text-xs text-midnight-navy/50">
+                    {store.transit_time_minutes} min transit
+                    {store.transit_cost != null && store.transit_cost > 0
+                      ? ` · +$${store.transit_cost.toFixed(2)}`
+                      : ''}
+                  </p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-semibold text-midnight-navy">
+                  ${store.running_total.toFixed(2)}
+                </p>
+                {store.adjusted_total !== store.running_total && (
+                  <p className="text-xs text-midnight-navy/50">
+                    ${store.adjusted_total.toFixed(2)} incl. transit
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Luis Rule warning */}
+            {store.luis_rule_excluded.length > 0 && (
+              <p className="mt-1 text-xs text-amber-600">
+                {store.luis_rule_excluded.length} bulk item(s) excluded (Luis Rule)
+              </p>
+            )}
+
+            {/* Jennifer Rule warnings */}
+            {store.items
+              .filter((it) => it.health_warning)
+              .slice(0, 2)
+              .map((it) => (
+                <p key={it.item_name} className="mt-1 text-xs text-red-500">
+                  {it.item_name}: {it.health_warning!.flags.join(', ')}
+                  {it.health_warning!.suggested_alternative &&
+                    ` — try ${it.health_warning!.suggested_alternative}`}
+                </p>
+              ))}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
