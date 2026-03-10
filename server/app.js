@@ -6,6 +6,7 @@ const express = require('express');
 const { parseGroceriesFromInput } = require('./services/parserService');
 const { calculateRunningTotals } = require('./services/costCalculator');
 const { addLogisticsCosts } = require('./services/logisticsService');
+const { importRecipeFromUrl } = require('./services/recipeImporter');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -111,6 +112,44 @@ app.post('/api/logistics', async (req, res) => {
     res.json({ stores: augmented });
   } catch (err) {
     console.error('[/api/logistics]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/import-recipe
+ *
+ * Fetches a recipe webpage URL and uses Gemini to extract title,
+ * ingredients (with categories), prep/cook time, and health score.
+ *
+ * Body:   { "url": "https://www.example.com/lemon-chicken-recipe" }
+ * Response: {
+ *   "title": string,
+ *   "health_score": number|null,
+ *   "prep_time_minutes": number|null,
+ *   "cook_time_minutes": number|null,
+ *   "image_url": string|null,
+ *   "ingredients": [{ "name", "quantity", "unit", "category" }]
+ * }
+ */
+app.post('/api/import-recipe', async (req, res) => {
+  const { url } = req.body;
+
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: '`url` must be a non-empty string.' });
+  }
+
+  try {
+    new URL(url); // validate URL structure
+  } catch {
+    return res.status(400).json({ error: 'Invalid URL format.' });
+  }
+
+  try {
+    const recipe = await importRecipeFromUrl(url);
+    res.json(recipe);
+  } catch (err) {
+    console.error('[/api/import-recipe]', err);
     res.status(500).json({ error: err.message });
   }
 });
