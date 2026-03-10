@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ToastProvider } from './contexts/ToastContext'
 import { Auth } from './pages/Auth'
 import { Scan } from './pages/Scan'
-import { Credits } from './pages/Credits'
 import { Profile } from './pages/Profile'
 import { Stores } from './pages/Stores'
 import { Recipes } from './pages/Recipes'
@@ -120,7 +119,7 @@ function AppContent() {
           <Recipes isVisible={activeTab === 'recipes'} />
         </div>
         <div className={activeTab === 'profile' ? '' : 'hidden'}>
-          <Profile isVisible={activeTab === 'profile'} />
+          <Profile isVisible={activeTab === 'profile'} key="profile" />
         </div>
       </main>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
@@ -139,6 +138,3 @@ function App() {
 }
 
 export default App
-
-// Re-export Credits so it remains accessible from Profile
-export { Credits }
