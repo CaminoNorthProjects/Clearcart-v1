@@ -1,0 +1,22 @@
+{
+  "name": "clearcart-server",
+  "version": "1.0.0",
+  "description": "Express backend for ClearCart grocery app",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node --watch app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@googlemaps/google-maps-services-js": "^3.4.2",
+    "@supabase/supabase-js": "^2.99.0",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "node-fetch": "^3.3.2"
+  }
+}
