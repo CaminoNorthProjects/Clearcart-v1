@@ -281,14 +281,109 @@ export function Profile({ isVisible }: { isVisible: boolean }) {
             Sign Out
           </button>
 
+          {/* Bill C-27 data rights */}
+          <DataRightsSection />
+
           <p className="pb-4 text-center text-xs text-midnight-navy/30">
             <a href="/privacy" className="underline underline-offset-2">Privacy Policy</a>
             {' · '}
-            <a href="/privacy" className="underline underline-offset-2">Your Data Rights</a>
+            Camino North Projects — Privacy Officer
           </p>
         </div>
       ) : null}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Bill C-27 Data Rights Section
+// ---------------------------------------------------------------------------
+
+function DataRightsSection() {
+  const { user, signOut } = useAuth()
+  const { showToast } = useToast()
+  const [downloading, setDownloading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDownload = async () => {
+    if (!user) return
+    setDownloading(true)
+    try {
+      const { data, error } = await supabase.rpc('export_user_data')
+      if (error) throw error
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `clearcart-data-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Your data has been downloaded.')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Download failed.')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!user) return
+    const confirmed = window.confirm(
+      'This will permanently delete ALL your data including scan history, recipes, and credits. This cannot be undone. Continue?'
+    )
+    if (!confirmed) return
+
+    setDeleting(true)
+    try {
+      // Delete all user data rows via RPC
+      const { error: rpcError } = await supabase.rpc('delete_user_data')
+      if (rpcError) throw rpcError
+
+      // Delete auth user via server (requires service role key)
+      const apiUrl = import.meta.env.VITE_API_URL as string | undefined
+      if (apiUrl) {
+        await fetch(`${apiUrl}/api/delete-account`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: user.id }),
+        })
+      }
+
+      showToast('Your account has been deleted.')
+      await signOut()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Deletion failed.')
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-midnight-navy/10 bg-white p-5">
+      <h3 className="font-display text-lg font-semibold text-midnight-navy">
+        Your Data Rights
+      </h3>
+      <p className="mt-1 text-xs text-midnight-navy/50">
+        Under Bill C-27, you have the right to access and delete your personal information.
+      </p>
+      <div className="mt-4 space-y-2">
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={downloading}
+          className="w-full rounded-xl border border-midnight-navy/20 bg-white px-4 py-2.5 text-sm font-medium text-midnight-navy hover:bg-midnight-navy/5 disabled:opacity-60"
+        >
+          {downloading ? 'Preparing download...' : 'Download My Data (JSON)'}
+        </button>
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={deleting}
+          className="w-full rounded-xl border border-sunset-red/30 bg-white px-4 py-2.5 text-sm font-medium text-sunset-red hover:bg-sunset-red/5 disabled:opacity-60"
+        >
+          {deleting ? 'Deleting...' : 'Delete My Account & Data'}
+        </button>
+      </div>
+    </section>
   )
 }
 

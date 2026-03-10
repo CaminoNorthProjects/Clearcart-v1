@@ -210,6 +210,43 @@ app.post('/api/create-checkout', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/delete-account
+ *
+ * Deletes the Supabase auth user after the client-side RPC has already
+ * removed their data rows. Requires the service role key.
+ *
+ * Body: { "user_id": "uuid" }
+ */
+app.post('/api/delete-account', async (req, res) => {
+  const { user_id } = req.body;
+
+  if (!user_id || typeof user_id !== 'string') {
+    return res.status(400).json({ error: '`user_id` is required.' });
+  }
+
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return res.status(503).json({ error: 'Server Supabase credentials are not configured.' });
+  }
+
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const adminClient = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    const { error } = await adminClient.auth.admin.deleteUser(user_id);
+    if (error) throw new Error(error.message);
+
+    console.log(`[/api/delete-account] Deleted auth user ${user_id}`);
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('[/api/delete-account]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`ClearCart server running on port ${PORT}`);

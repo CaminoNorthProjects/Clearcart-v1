@@ -10,6 +10,7 @@ import { Recipes } from './pages/Recipes'
 import { BottomNav, type TabId } from './components/BottomNav'
 import { supabase } from './lib/supabase'
 import { fetchAdvocacyHighlights, type AdvocacyHighlight } from './lib/advocacy'
+import { ConsentModal } from './components/ConsentModal'
 
 function HomeView({ isVisible }: { isVisible: boolean }) {
   const { user } = useAuth()
@@ -128,8 +129,21 @@ function AdvocacyFeed() {
 }
 
 function AppContent() {
-  const { session, loading } = useAuth()
+  const { session, loading, user } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>('home')
+  const [needsConsent, setNeedsConsent] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    supabase
+      .from('profiles')
+      .select('consent_given_at')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (!data?.consent_given_at) setNeedsConsent(true)
+      })
+  }, [user])
 
   if (loading) {
     return (
@@ -145,6 +159,9 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-cream">
+      {needsConsent && (
+        <ConsentModal onAccepted={() => setNeedsConsent(false)} />
+      )}
       <main className="pb-28 pt-6">
         <div className={activeTab === 'home' ? '' : 'hidden'}>
           <HomeView isVisible={activeTab === 'home'} />
