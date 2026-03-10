@@ -7,6 +7,7 @@ const { parseGroceriesFromInput } = require('./services/parserService');
 const { calculateRunningTotals } = require('./services/costCalculator');
 const { addLogisticsCosts } = require('./services/logisticsService');
 const { importRecipeFromUrl } = require('./services/recipeImporter');
+const Stripe = require('stripe');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -150,6 +151,61 @@ app.post('/api/import-recipe', async (req, res) => {
     res.json(recipe);
   } catch (err) {
     console.error('[/api/import-recipe]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/create-checkout
+ *
+ * Creates a Stripe Checkout Session for the $10.99/month Premium subscription.
+ * The supabase_user_id is stored in Stripe metadata so the stripe-webhook Edge
+ * Function can look up the correct profile and set is_premium = true.
+ *
+ * Body:   { "supabase_user_id": "uuid", "email": "user@example.com" }
+ * Response: { "url": "https://checkout.stripe.com/..." }
+ */
+app.post('/api/create-checkout', async (req, res) => {
+  const { supabase_user_id, email } = req.body;
+
+  if (!supabase_user_id || typeof supabase_user_id !== 'string') {
+    return res.status(400).json({ error: '`supabase_user_id` is required.' });
+  }
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return res.status(503).json({ error: 'Stripe is not configured on this server.' });
+  }
+  if (!process.env.STRIPE_PREMIUM_PRICE_ID) {
+    return res.status(503).json({ error: 'STRIPE_PREMIUM_PRICE_ID is not configured.' });
+  }
+
+  try {
+    const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer_email: email ?? undefined,
+      line_items: [
+        {
+          price: process.env.STRIPE_PREMIUM_PRICE_ID,
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        supabase_user_id,
+      },
+      subscription_data: {
+        metadata: {
+          supabase_user_id,
+        },
+      },
+      success_url: `${process.env.APP_URL ?? 'https://clearcart.repl.co'}?premium=success`,
+      cancel_url: `${process.env.APP_URL ?? 'https://clearcart.repl.co'}?premium=cancelled`,
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('[/api/create-checkout]', err);
     res.status(500).json({ error: err.message });
   }
 });
