@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import { supabase } from '../lib/supabase'
 import { useProfilePrefs } from '../contexts/ProfileContext'
 import { fetchCosts, fetchAdjustedTotals, type StoreResult } from '../lib/tripleConstraint'
+import { Checkout } from './Checkout'
 
 // ---------------------------------------------------------------------------
 // Fix Leaflet's default icon path resolution in Vite
@@ -106,6 +107,7 @@ export function Stores({ isVisible }: { isVisible: boolean }) {
   const [tcResults, setTcResults] = useState<StoreResult[]>([])
   const [tcLoading, setTcLoading] = useState(false)
   const [selectedStore, setSelectedStore] = useState<StoreRow | null>(null)
+  const [checkoutStore, setCheckoutStore] = useState<StoreResult | null>(null)
   const runningTC = useRef(false)
 
   // Sync activeMode with user's stored preference when it loads
@@ -272,7 +274,11 @@ export function Stores({ isVisible }: { isVisible: boolean }) {
             </h3>
             <ul className="mt-2 divide-y divide-midnight-navy/10 rounded-xl border border-midnight-navy/10 bg-white">
               {tcResults.slice(0, 6).map((r, i) => (
-                <li key={r.store_name} className="flex items-center justify-between px-4 py-3">
+                <li
+                  key={r.store_name}
+                  className="flex cursor-pointer items-center justify-between px-4 py-3 hover:bg-cream transition-colors"
+                  onClick={() => setCheckoutStore(r)}
+                >
                   <div>
                     <p className="text-sm font-medium text-midnight-navy">
                       {i === 0 && <span className="mr-1 font-bold text-emerald-600">★ </span>}
@@ -284,15 +290,18 @@ export function Stores({ isVisible }: { isVisible: boolean }) {
                       </p>
                     )}
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-midnight-navy">
-                      ${r.running_total.toFixed(2)}
-                    </p>
-                    {activeMode === 'time' && r.adjusted_total !== r.running_total && (
-                      <p className="text-xs text-midnight-navy/40">
-                        ${r.adjusted_total.toFixed(2)} total
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-midnight-navy">
+                        ${r.running_total.toFixed(2)}
                       </p>
-                    )}
+                      {activeMode === 'time' && r.adjusted_total !== r.running_total && (
+                        <p className="text-xs text-midnight-navy/40">
+                          ${r.adjusted_total.toFixed(2)} total
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-midnight-navy/30">›</span>
                   </div>
                 </li>
               ))}
@@ -325,6 +334,15 @@ export function Stores({ isVisible }: { isVisible: boolean }) {
       {/* Store detail bottom sheet */}
       {selectedStore && (
         <StoreBottomSheet store={selectedStore} onClose={() => setSelectedStore(null)} />
+      )}
+
+      {/* Checkout sheet */}
+      {checkoutStore && (
+        <Checkout
+          store={checkoutStore}
+          allStores={tcResults}
+          onClose={() => setCheckoutStore(null)}
+        />
       )}
     </div>
   )
