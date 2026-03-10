@@ -1,62 +1,69 @@
 -- =============================================================================
--- ClearCart Master Setup
--- Run this ONCE on a fresh Supabase project (e.g. a new Canadian-region instance).
+-- ClearCart Master Setup — Full Reset & Rebuild
 --
--- Creates all tables, RLS policies, RPCs, and store seed data in a single pass.
--- No ALTER TABLE statements — every table is created with all columns from the
--- start, so there are no ordering dependencies.
+-- Run this as a SINGLE query in Supabase SQL Editor → New query.
+-- Safe on any project state: drops all ClearCart tables first, then recreates
+-- everything from scratch with the correct final schema.
 --
 -- After this script succeeds:
---   1. Create the 'receipts' Storage bucket manually in the Supabase Dashboard
---      (Storage → New bucket → name: receipts → Public: On)
---   2. Run the two storage policies at the bottom of this file as a second query.
+--   1. Create the 'receipts' Storage bucket manually in the Supabase Dashboard:
+--      Storage → New bucket → name: receipts → Public: On → Save
+--   2. Then run the two storage policy statements at the very bottom of this
+--      file as a second, separate query.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
--- Extensions
+-- STEP 1: DROP EVERYTHING (reverse dependency order)
+-- CASCADE removes dependent policies, constraints, and views automatically.
+-- ---------------------------------------------------------------------------
+DROP TABLE IF EXISTS public.recipe_ingredients CASCADE;
+DROP TABLE IF EXISTS public.recipes            CASCADE;
+DROP TABLE IF EXISTS public.flagged_prices     CASCADE;
+DROP TABLE IF EXISTS public.stores             CASCADE;
+DROP TABLE IF EXISTS public.prices             CASCADE;
+DROP TABLE IF EXISTS public.receipt_scans      CASCADE;
+DROP TABLE IF EXISTS public.profiles           CASCADE;
+
+DROP FUNCTION IF EXISTS public.award_scan_credits(UUID)  CASCADE;
+DROP FUNCTION IF EXISTS public.export_user_data()        CASCADE;
+DROP FUNCTION IF EXISTS public.delete_user_data()        CASCADE;
+
+-- ---------------------------------------------------------------------------
+-- STEP 2: EXTENSIONS
 -- ---------------------------------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- ---------------------------------------------------------------------------
--- PROFILES
--- Extends auth.users. Populated on sign-up by the app via upsert.
+-- STEP 3: TABLES (dependency order — parents before children)
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.profiles (
+
+-- PROFILES — extends auth.users; populated on sign-up via upsert
+CREATE TABLE public.profiles (
   id                UUID         PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name         TEXT,
   postal_code       TEXT,
   clear_credits     INTEGER      NOT NULL DEFAULT 0,
   is_beta_tester    BOOLEAN      NOT NULL DEFAULT false,
   updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  -- Triple Constraint preferences
   primary_focus     TEXT         NOT NULL DEFAULT 'cost'
     CHECK (primary_focus IN ('cost', 'time', 'health')),
   storage_capacity  TEXT         NOT NULL DEFAULT 'standard'
     CHECK (storage_capacity IN ('standard', 'condo/small')),
   strict_health     BOOLEAN      NOT NULL DEFAULT false,
   is_premium        BOOLEAN      NOT NULL DEFAULT false,
-  -- Bill C-27 consent timestamp (NULL = consent modal not yet shown)
   consent_given_at  TIMESTAMPTZ
 );
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Users can read own profile"
-  ON public.profiles FOR SELECT TO authenticated
-  USING (id = auth.uid());
-
+  ON public.profiles FOR SELECT TO authenticated USING (id = auth.uid());
 CREATE POLICY "Users can insert own profile"
-  ON public.profiles FOR INSERT TO authenticated
-  WITH CHECK (id = auth.uid());
-
+  ON public.profiles FOR INSERT TO authenticated WITH CHECK (id = auth.uid());
 CREATE POLICY "Users can update own profile"
-  ON public.profiles FOR UPDATE TO authenticated
-  USING (id = auth.uid());
+  ON public.profiles FOR UPDATE TO authenticated USING (id = auth.uid());
 
--- ---------------------------------------------------------------------------
 -- RECEIPT_SCANS
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.receipt_scans (
+CREATE TABLE public.receipt_scans (
   id              UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id         UUID         NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   image_url       TEXT,
@@ -68,20 +75,15 @@ CREATE TABLE IF NOT EXISTS public.receipt_scans (
 );
 
 ALTER TABLE public.receipt_scans ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Users can select own receipt_scans"
   ON public.receipt_scans FOR SELECT TO authenticated
   USING (user_id = auth.uid());
-
 CREATE POLICY "Users can insert own receipt_scans"
   ON public.receipt_scans FOR INSERT TO authenticated
   WITH CHECK (user_id = auth.uid());
 
--- ---------------------------------------------------------------------------
--- PRICES
--- Includes all columns from all phases — no ALTER TABLE needed.
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.prices (
+-- PRICES — depends on receipt_scans; contains ALL columns from all phases
+CREATE TABLE public.prices (
   id                    UUID          DEFAULT gen_random_uuid() PRIMARY KEY,
   item_name             TEXT          NOT NULL,
   price                 DECIMAL(10,2) NOT NULL,
@@ -90,7 +92,6 @@ CREATE TABLE IF NOT EXISTS public.prices (
   is_delivery_app_price BOOLEAN       NOT NULL DEFAULT false,
   receipt_scan_id       UUID          REFERENCES public.receipt_scans(id) ON DELETE CASCADE,
   scanned_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-  -- Triple Constraint / Luis Rule / Jennifer Rule attributes
   is_perishable         BOOLEAN       NOT NULL DEFAULT false,
   is_bulk_discount      BOOLEAN       NOT NULL DEFAULT false,
   health_flags          TEXT[]        NOT NULL DEFAULT '{}',
@@ -99,24 +100,19 @@ CREATE TABLE IF NOT EXISTS public.prices (
 );
 
 ALTER TABLE public.prices ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Authenticated can insert prices"
   ON public.prices FOR INSERT TO authenticated
   WITH CHECK (
-    receipt_scan_id IN (SELECT id FROM receipt_scans WHERE user_id = auth.uid())
+    receipt_scan_id IN (SELECT id FROM public.receipt_scans WHERE user_id = auth.uid())
   );
-
 CREATE POLICY "Users can select own prices"
   ON public.prices FOR SELECT TO authenticated
   USING (
-    receipt_scan_id IN (SELECT id FROM receipt_scans WHERE user_id = auth.uid())
+    receipt_scan_id IN (SELECT id FROM public.receipt_scans WHERE user_id = auth.uid())
   );
 
--- ---------------------------------------------------------------------------
--- STORES
--- Pre-geocoded lat/lng so the map renders without client-side API calls.
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.stores (
+-- STORES — pre-geocoded lat/lng so the Leaflet map renders without API calls
+CREATE TABLE public.stores (
   id           UUID             DEFAULT gen_random_uuid() PRIMARY KEY,
   name         TEXT             NOT NULL,
   type         TEXT             NOT NULL
@@ -131,16 +127,12 @@ CREATE TABLE IF NOT EXISTS public.stores (
 );
 
 ALTER TABLE public.stores ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Anyone authenticated can read stores"
   ON public.stores FOR SELECT
   USING (auth.role() = 'authenticated');
 
--- ---------------------------------------------------------------------------
--- FLAGGED_PRICES
--- Community price advocacy — written by ComparisonCard "Share to Community" button.
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.flagged_prices (
+-- FLAGGED_PRICES — community price advocacy
+CREATE TABLE public.flagged_prices (
   id            UUID          DEFAULT gen_random_uuid() PRIMARY KEY,
   price_id      UUID          REFERENCES public.prices(id) ON DELETE SET NULL,
   user_id       UUID          NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -151,19 +143,15 @@ CREATE TABLE IF NOT EXISTS public.flagged_prices (
 );
 
 ALTER TABLE public.flagged_prices ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Users can insert their own flags"
   ON public.flagged_prices FOR INSERT
   WITH CHECK (auth.uid() = user_id);
-
 CREATE POLICY "Anyone authenticated can read flags"
   ON public.flagged_prices FOR SELECT
   USING (auth.role() = 'authenticated');
 
--- ---------------------------------------------------------------------------
 -- RECIPES
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.recipes (
+CREATE TABLE public.recipes (
   id                UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id           UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title             TEXT        NOT NULL,
@@ -176,16 +164,13 @@ CREATE TABLE IF NOT EXISTS public.recipes (
 );
 
 ALTER TABLE public.recipes ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Users manage their own recipes"
   ON public.recipes FOR ALL
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- ---------------------------------------------------------------------------
--- RECIPE_INGREDIENTS
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.recipe_ingredients (
+-- RECIPE_INGREDIENTS — depends on recipes
+CREATE TABLE public.recipe_ingredients (
   id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   recipe_id  UUID NOT NULL REFERENCES public.recipes(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
@@ -195,7 +180,6 @@ CREATE TABLE IF NOT EXISTS public.recipe_ingredients (
 );
 
 ALTER TABLE public.recipe_ingredients ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Users manage their own recipe ingredients"
   ON public.recipe_ingredients FOR ALL
   USING (
@@ -206,9 +190,10 @@ CREATE POLICY "Users manage their own recipe ingredients"
   );
 
 -- ---------------------------------------------------------------------------
--- RPC: award_scan_credits
--- Atomic credit award — prevents double-awarding via credits_awarded column.
+-- STEP 4: RPCs (SECURITY DEFINER so they bypass RLS safely)
 -- ---------------------------------------------------------------------------
+
+-- award_scan_credits: atomic credit award — prevents double-awarding
 CREATE OR REPLACE FUNCTION public.award_scan_credits(p_receipt_scan_id UUID)
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -247,10 +232,7 @@ BEGIN
 END;
 $$;
 
--- ---------------------------------------------------------------------------
--- RPC: export_user_data  (Bill C-27 — right of access)
--- Returns all rows belonging to the calling user as a JSON object.
--- ---------------------------------------------------------------------------
+-- export_user_data: Bill C-27 right of access
 CREATE OR REPLACE FUNCTION public.export_user_data()
 RETURNS JSON
 LANGUAGE plpgsql
@@ -262,7 +244,7 @@ DECLARE
 BEGIN
   SELECT json_build_object(
     'profile',        (SELECT row_to_json(p) FROM profiles p WHERE p.id = auth.uid()),
-    'receipt_scans',  (SELECT json_agg(r)    FROM receipt_scans r WHERE r.user_id = auth.uid()),
+    'receipt_scans',  (SELECT json_agg(r)    FROM receipt_scans r   WHERE r.user_id = auth.uid()),
     'prices',         (
       SELECT json_agg(pr)
       FROM prices pr
@@ -274,7 +256,6 @@ BEGIN
     'recipes',        (SELECT json_agg(rec) FROM recipes rec        WHERE rec.user_id = auth.uid()),
     'exported_at',    NOW()
   ) INTO result;
-
   RETURN result;
 END;
 $$;
@@ -282,11 +263,9 @@ $$;
 REVOKE ALL ON FUNCTION public.export_user_data() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.export_user_data() TO authenticated;
 
--- ---------------------------------------------------------------------------
--- RPC: delete_user_data  (Bill C-27 — right of erasure)
+-- delete_user_data: Bill C-27 right of erasure
 -- Deletes all user-owned rows. The auth.users row is removed separately
--- via the Express server /api/delete-account route (requires service role key).
--- ---------------------------------------------------------------------------
+-- via the Express /api/delete-account route (requires service role key).
 CREATE OR REPLACE FUNCTION public.delete_user_data()
 RETURNS VOID
 LANGUAGE plpgsql
@@ -294,7 +273,6 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  -- Recipes cascade to recipe_ingredients via FK
   DELETE FROM public.recipes        WHERE user_id = auth.uid();
   DELETE FROM public.flagged_prices WHERE user_id = auth.uid();
   DELETE FROM public.prices
@@ -310,8 +288,8 @@ REVOKE ALL ON FUNCTION public.delete_user_data() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.delete_user_data() TO authenticated;
 
 -- ---------------------------------------------------------------------------
--- STORE SEED DATA — 15 real Vancouver-area locations
--- ON CONFLICT DO NOTHING makes this safe to re-run.
+-- STEP 5: STORE SEED DATA — 15 Vancouver-area locations
+-- ON CONFLICT DO NOTHING is a safety net in case the script is re-run.
 -- ---------------------------------------------------------------------------
 INSERT INTO public.stores (name, type, address, lat, lng, has_delivery, owner_story, hours)
 VALUES
@@ -394,10 +372,10 @@ ON CONFLICT DO NOTHING;
 
 -- =============================================================================
 -- STORAGE POLICIES
--- Run these AFTER creating the 'receipts' bucket in the Supabase Dashboard:
---   Storage → New bucket → name: receipts → Public: On → Save
+-- Run these as a SECOND, SEPARATE query AFTER creating the 'receipts' bucket:
+--   Supabase Dashboard → Storage → New bucket → name: receipts → Public: On → Save
 --
--- Then paste and run these two statements as a second query:
+-- Then open a new SQL Editor query and paste only the two statements below:
 -- =============================================================================
 
 -- CREATE POLICY "Authenticated users can upload receipts"
