@@ -9,6 +9,7 @@ import { Stores } from './pages/Stores'
 import { Recipes } from './pages/Recipes'
 import { BottomNav, type TabId } from './components/BottomNav'
 import { supabase } from './lib/supabase'
+import { fetchAdvocacyHighlights, type AdvocacyHighlight } from './lib/advocacy'
 
 function HomeView({ isVisible }: { isVisible: boolean }) {
   const { user } = useAuth()
@@ -75,15 +76,53 @@ function HomeView({ isVisible }: { isVisible: boolean }) {
 }
 
 function AdvocacyFeed() {
+  const [highlights, setHighlights] = useState<AdvocacyHighlight[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchAdvocacyHighlights(5)
+      .then(setHighlights)
+      .finally(() => setLoading(false))
+  }, [])
+
   return (
     <div className="mt-8 w-full max-w-sm">
       <h3 className="font-display text-lg font-semibold text-midnight-navy">
         Price Advocacy Highlights
       </h3>
-      <p className="mt-2 rounded-xl border border-midnight-navy/10 bg-white p-4 text-sm text-midnight-navy/50">
-        Community-wide questionable sales from Vancouver will appear here.
-        Coming soon.
+      <p className="mt-1 text-xs text-midnight-navy/40">
+        Most-flagged questionable prices in Vancouver — shared by the community.
       </p>
+
+      {loading ? (
+        <p className="mt-3 text-sm text-midnight-navy/50">Loading...</p>
+      ) : highlights.length === 0 ? (
+        <div className="mt-2 rounded-xl border border-midnight-navy/10 bg-white p-4">
+          <p className="text-sm text-midnight-navy/50">
+            No flagged prices yet. Scan a receipt and tap "Share to Community" on any
+            questionable price to be the first.
+          </p>
+        </div>
+      ) : (
+        <ul className="mt-2 divide-y divide-midnight-navy/10 rounded-xl border border-midnight-navy/10 bg-white">
+          {highlights.map((h, i) => (
+            <li key={i} className="flex items-center justify-between px-4 py-3">
+              <div className="flex-1 min-w-0 pr-3">
+                <p className="text-sm font-semibold text-midnight-navy truncate">{h.item_name}</p>
+                <p className="text-xs text-midnight-navy/50 truncate">{h.store_name}</p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-sm font-semibold text-amber-600">
+                  ${h.flagged_price.toFixed(2)}
+                </p>
+                <p className="text-xs text-midnight-navy/40">
+                  {h.flag_count} {h.flag_count === 1 ? 'flag' : 'flags'}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
