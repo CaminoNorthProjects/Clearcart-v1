@@ -94,22 +94,22 @@ export function Auth() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-6 pb-[env(safe-area-inset-bottom)] pt-6">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-cream px-6 pb-[env(safe-area-inset-bottom)] pt-6">
       <div className="w-full max-w-sm">
-        <h1 className="text-center text-2xl font-bold text-gray-900">
+        <h1 className="font-display text-center text-4xl font-semibold tracking-tight text-midnight-navy">
           ClearCart
         </h1>
-        <p className="mt-1 text-center text-sm text-gray-600">
-          Grocery price advocacy
+        <p className="mt-2 text-center text-sm text-midnight-navy/60">
+          Grocery price advocacy for Vancouver
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-10 space-y-4">
           {mode === 'signup' && (
             <>
               <div>
                 <label
                   htmlFor="fullName"
-                  className="block text-sm font-medium text-gray-700"
+                  className="block text-sm font-medium text-midnight-navy"
                 >
                   Full Name
                 </label>
@@ -119,14 +119,14 @@ export function Auth() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Jane Doe"
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="mt-1 w-full rounded-lg border border-midnight-navy/20 bg-white px-4 py-3 text-midnight-navy placeholder-midnight-navy/40 focus:border-sunset-red focus:outline-none focus:ring-2 focus:ring-sunset-red/20"
                   autoComplete="name"
                 />
               </div>
               <div>
                 <label
                   htmlFor="postalCode"
-                  className="block text-sm font-medium text-gray-700"
+                  className="block text-sm font-medium text-midnight-navy"
                 >
                   Vancouver Postal Code
                 </label>
@@ -137,7 +137,7 @@ export function Auth() {
                   onChange={(e) => setPostalCode(e.target.value.toUpperCase())}
                   placeholder="V6B 1A1"
                   maxLength={7}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="mt-1 w-full rounded-lg border border-midnight-navy/20 bg-white px-4 py-3 text-midnight-navy placeholder-midnight-navy/40 focus:border-sunset-red focus:outline-none focus:ring-2 focus:ring-sunset-red/20"
                   autoComplete="postal-code"
                 />
               </div>
@@ -147,7 +147,7 @@ export function Auth() {
           <div>
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-midnight-navy"
             >
               Email
             </label>
@@ -158,7 +158,7 @@ export function Auth() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="mt-1 w-full rounded-lg border border-midnight-navy/20 bg-white px-4 py-3 text-midnight-navy placeholder-midnight-navy/40 focus:border-sunset-red focus:outline-none focus:ring-2 focus:ring-sunset-red/20"
               autoComplete="email"
             />
           </div>
@@ -166,7 +166,7 @@ export function Auth() {
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-midnight-navy"
             >
               Password
             </label>
@@ -178,13 +178,13 @@ export function Auth() {
               placeholder="••••••••"
               required
               minLength={6}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="mt-1 w-full rounded-lg border border-midnight-navy/20 bg-white px-4 py-3 text-midnight-navy placeholder-midnight-navy/40 focus:border-sunset-red focus:outline-none focus:ring-2 focus:ring-sunset-red/20"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-600" role="alert">
+            <p className="text-sm text-sunset-red" role="alert">
               {error}
             </p>
           )}
@@ -197,21 +197,25 @@ export function Auth() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50"
+            className="w-full rounded-lg bg-sunset-red px-4 py-3 font-display font-semibold text-lg tracking-wide text-white transition-colors hover:bg-sunset-red/90 focus:outline-none focus:ring-2 focus:ring-sunset-red focus:ring-offset-2 disabled:opacity-50"
           >
-            {loading ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Sign up'}
+            {loading ? 'Please wait...' : mode === 'login' ? 'Log In' : 'Sign Up'}
           </button>
         </form>
 
         <button
           type="button"
           onClick={handleToggleMode}
-          className="mt-6 w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          className="mt-4 w-full rounded-lg border border-midnight-navy/20 bg-white px-4 py-3 text-sm font-medium text-midnight-navy transition-colors hover:bg-midnight-navy/5"
         >
           {mode === 'login'
             ? "Don't have an account? Sign up"
             : 'Already have an account? Log in'}
         </button>
+
+        <p className="mt-8 text-center text-xs text-midnight-navy/40">
+          <a href="/privacy" className="underline underline-offset-2">Privacy Policy</a>
+        </p>
       </div>
     </div>
   )

@@ -4,10 +4,11 @@ import { ToastProvider } from './contexts/ToastContext'
 import { Auth } from './pages/Auth'
 import { Scan } from './pages/Scan'
 import { Credits } from './pages/Credits'
-import { BottomNav } from './components/BottomNav'
+import { Profile } from './pages/Profile'
+import { Stores } from './pages/Stores'
+import { Recipes } from './pages/Recipes'
+import { BottomNav, type TabId } from './components/BottomNav'
 import { supabase } from './lib/supabase'
-
-type TabId = 'home' | 'scan' | 'credits'
 
 function HomeView({ isVisible }: { isVisible: boolean }) {
   const { user } = useAuth()
@@ -17,7 +18,6 @@ function HomeView({ isVisible }: { isVisible: boolean }) {
 
   const fetchProfile = useCallback(async () => {
     if (!user) return
-
     setLoading(true)
     try {
       const { data, error } = await supabase
@@ -25,7 +25,6 @@ function HomeView({ isVisible }: { isVisible: boolean }) {
         .select('full_name, clear_credits')
         .eq('id', user.id)
         .single()
-
       if (!error) {
         setFullName(data?.full_name ?? null)
         setBalance(data?.clear_credits ?? 0)
@@ -47,42 +46,47 @@ function HomeView({ isVisible }: { isVisible: boolean }) {
 
   return (
     <div className="flex flex-col items-center px-6 py-8">
-      <h1 className="text-2xl font-bold text-gray-900">
+      <h1 className="font-display text-3xl font-semibold text-midnight-navy">
         Welcome Back, {displayName}
       </h1>
-      <p className="mt-2 text-gray-600">
+      <p className="mt-2 text-sm text-midnight-navy/60">
         Grocery price advocacy at your fingertips.
       </p>
 
       {loading ? (
-        <p className="mt-8 text-gray-500">Loading...</p>
+        <p className="mt-8 text-midnight-navy/50">Loading...</p>
       ) : (
         <>
-          <div className="mt-8 w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-              Current Balance
+          <div className="mt-8 w-full max-w-sm rounded-xl border border-midnight-navy/10 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-midnight-navy/40">
+              ClearCredits Balance
             </p>
-            <p className="mt-1 text-3xl font-bold text-emerald-600">
-              {balance ?? 0} ClearCredits
+            <p className="mt-1 font-display text-4xl font-semibold text-emerald-600">
+              {balance ?? 0}
             </p>
+            <p className="text-sm text-midnight-navy/50">credits earned</p>
           </div>
 
-          <div className="mt-8 w-full max-w-sm">
-            <h3 className="text-sm font-medium text-gray-700">
-              Price Advocacy Highlights
-            </h3>
-            <p className="mt-2 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-500">
-              Community-wide questionable sales from Vancouver will appear here.
-              Coming soon.
-            </p>
-          </div>
+          <AdvocacyFeed />
         </>
       )}
     </div>
   )
 }
 
-
+function AdvocacyFeed() {
+  return (
+    <div className="mt-8 w-full max-w-sm">
+      <h3 className="font-display text-lg font-semibold text-midnight-navy">
+        Price Advocacy Highlights
+      </h3>
+      <p className="mt-2 rounded-xl border border-midnight-navy/10 bg-white p-4 text-sm text-midnight-navy/50">
+        Community-wide questionable sales from Vancouver will appear here.
+        Coming soon.
+      </p>
+    </div>
+  )
+}
 
 function AppContent() {
   const { session, loading } = useAuth()
@@ -90,8 +94,8 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-gray-600">Loading...</p>
+      <div className="flex min-h-screen items-center justify-center bg-cream">
+        <p className="font-display text-xl text-midnight-navy/50">Loading...</p>
       </div>
     )
   }
@@ -101,16 +105,22 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="pb-24 pt-6">
+    <div className="min-h-screen bg-cream">
+      <main className="pb-28 pt-6">
         <div className={activeTab === 'home' ? '' : 'hidden'}>
           <HomeView isVisible={activeTab === 'home'} />
         </div>
         <div className={activeTab === 'scan' ? '' : 'hidden'}>
           <Scan />
         </div>
-        <div className={activeTab === 'credits' ? '' : 'hidden'}>
-          <Credits isVisible={activeTab === 'credits'} />
+        <div className={activeTab === 'stores' ? '' : 'hidden'}>
+          <Stores isVisible={activeTab === 'stores'} />
+        </div>
+        <div className={activeTab === 'recipes' ? '' : 'hidden'}>
+          <Recipes isVisible={activeTab === 'recipes'} />
+        </div>
+        <div className={activeTab === 'profile' ? '' : 'hidden'}>
+          <Profile isVisible={activeTab === 'profile'} />
         </div>
       </main>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
@@ -129,3 +139,6 @@ function App() {
 }
 
 export default App
+
+// Re-export Credits so it remains accessible from Profile
+export { Credits }

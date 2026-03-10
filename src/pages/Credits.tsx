@@ -19,7 +19,6 @@ export function Credits({ isVisible }: { isVisible: boolean }) {
 
   const fetchCredits = useCallback(async () => {
     if (!user) return
-
     setLoading(true)
     setError(null)
 
@@ -30,11 +29,7 @@ export function Credits({ isVisible }: { isVisible: boolean }) {
         .eq('id', user.id)
         .single()
 
-      if (profileError) {
-        setError(profileError.message)
-        return
-      }
-
+      if (profileError) { setError(profileError.message); return }
       setBalance(profile?.clear_credits ?? 0)
 
       const { data: scans, error: scansError } = await supabase
@@ -45,11 +40,7 @@ export function Credits({ isVisible }: { isVisible: boolean }) {
         .order('created_at', { ascending: false })
         .limit(20)
 
-      if (scansError) {
-        setError(scansError.message)
-        return
-      }
-
+      if (scansError) { setError(scansError.message); return }
       setHistory((scans ?? []) as ReceiptScanRow[])
     } finally {
       setLoading(false)
@@ -57,74 +48,64 @@ export function Credits({ isVisible }: { isVisible: boolean }) {
   }, [user])
 
   useEffect(() => {
-    if (isVisible && user) {
-      fetchCredits()
-    }
+    if (isVisible && user) fetchCredits()
   }, [isVisible, user, fetchCredits])
 
   if (!user) return null
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso)
-    return d.toLocaleDateString(undefined, {
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
     })
-  }
 
   return (
     <div className="flex flex-col items-center px-6 py-8">
-      <h2 className="text-xl font-bold text-gray-900">ClearCredits</h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Your balance and scan history.
-      </p>
+      <h2 className="font-display text-3xl font-semibold text-midnight-navy">ClearCredits</h2>
+      <p className="mt-1 text-sm text-midnight-navy/60">Your balance and scan history.</p>
 
       {loading ? (
-        <p className="mt-8 text-gray-500">Loading...</p>
+        <p className="mt-8 text-midnight-navy/50">Loading...</p>
       ) : error ? (
-        <p className="mt-8 text-sm text-red-600" role="alert">
+        <p className="mt-8 rounded-xl bg-sunset-red/10 p-3 text-sm text-sunset-red" role="alert">
           {error}
         </p>
       ) : (
         <>
-          <div className="mt-8 w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+          <div className="mt-8 w-full max-w-sm rounded-xl border border-midnight-navy/10 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-midnight-navy/40">
               Balance
             </p>
-            <p className="mt-1 text-3xl font-bold text-emerald-600">
-              {balance ?? 0} credits
+            <p className="mt-1 font-display text-4xl font-semibold text-emerald-600">
+              {balance ?? 0}
             </p>
+            <p className="text-sm text-midnight-navy/50">credits earned</p>
           </div>
 
           <div className="mt-6 w-full max-w-sm">
-            <h3 className="text-sm font-medium text-gray-700">Recent scans</h3>
+            <h3 className="font-display text-lg font-semibold text-midnight-navy">Recent Scans</h3>
             {history.length === 0 ? (
-              <p className="mt-2 text-sm text-gray-500">
+              <p className="mt-2 text-sm text-midnight-navy/50">
                 No scans with credits yet. Scan a receipt to earn!
               </p>
             ) : (
-              <ul className="mt-2 divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white">
+              <ul className="mt-2 divide-y divide-midnight-navy/10 rounded-xl border border-midnight-navy/10 bg-white">
                 {history.map((scan) => (
-                  <li
-                    key={scan.id}
-                    className="flex items-center justify-between px-4 py-3"
-                  >
+                  <li key={scan.id} className="flex items-center justify-between px-4 py-3">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-medium text-midnight-navy">
                         {scan.store_name ?? 'Unknown store'}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        {formatDate(scan.created_at)}
-                      </p>
+                      <p className="text-xs text-midnight-navy/50">{formatDate(scan.created_at)}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       {scan.store_type === 'Local Gem' && (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                        <span className="rounded-full bg-burgundy/10 px-2 py-0.5 text-xs font-semibold text-burgundy">
                           Local Gem
                         </span>
                       )}
-                      <span className="text-sm font-medium text-emerald-600">
+                      <span className="text-sm font-semibold text-emerald-600">
                         +{scan.credits_awarded}
                       </span>
                     </div>

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import Tesseract from 'tesseract.js'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../lib/supabase'
@@ -16,6 +15,34 @@ import {
 } from '../lib/compare'
 import { ComparisonCard } from '../components/ComparisonCard'
 
+const API_URL = import.meta.env.VITE_API_URL as string | undefined
+const USE_GEMINI = !!API_URL
+
+type ScanStatus =
+  | 'idle'
+  | 'camera'
+  | 'preview'
+  | 'uploading'
+  | 'scanning_market'
+  | 'done'
+  | 'error'
+
+/** Call Gemini Vision via the Express server to extract items from the receipt. */
+async function parseWithGemini(imageUrl: string): Promise<ParsedLineItem[]> {
+  const res = await fetch(`${API_URL}/api/parse`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: imageUrl }),
+  })
+  if (!res.ok) throw new Error('Gemini parser failed.')
+  const json = await res.json() as { items: { name: string; quantity: number; unit: string }[] }
+  return json.items.map((it) => ({
+    item_name: it.name,
+    price: 0,
+    quantity: it.quantity ?? 1,
+  }))
+}
+
 export function Scan() {
   const { user } = useAuth()
   const { showToast } = useToast()
@@ -23,9 +50,7 @@ export function Scan() {
   const streamRef = useRef<MediaStream | null>(null)
   const uploadingRef = useRef(false)
 
-  const [status, setStatus] = useState<
-    'idle' | 'camera' | 'preview' | 'uploading' | 'scanning_market' | 'done' | 'error'
-  >('idle')
+  const [status, setStatus] = useState<ScanStatus>('idle')
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [ocrText, setOcrText] = useState<string | null>(null)
@@ -60,23 +85,18 @@ export function Scan() {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false,
-      }).catch(() =>
-        navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
-          audio: false,
-        })
-      )
+      const stream = await navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+        .catch(() =>
+          navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+        )
 
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
       }
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'Could not access camera.'
+      const msg = err instanceof Error ? err.message : 'Could not access camera.'
       setError(
         msg.includes('Permission') || msg.includes('denied')
           ? 'Camera permission denied. Please allow camera access in your browser settings.'
@@ -88,7 +108,6 @@ export function Scan() {
 
   const capturePhoto = () => {
     if (!videoRef.current || !streamRef.current) return
-
     const video = videoRef.current
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
@@ -98,13 +117,8 @@ export function Scan() {
     let w = video.videoWidth
     let h = video.videoHeight
     if (w > MAX_DIM || h > MAX_DIM) {
-      if (w > h) {
-        h = Math.round((h * MAX_DIM) / w)
-        w = MAX_DIM
-      } else {
-        w = Math.round((w * MAX_DIM) / h)
-        h = MAX_DIM
-      }
+      if (w > h) { h = Math.round((h * MAX_DIM) / w); w = MAX_DIM }
+      else { w = Math.round((w * MAX_DIM) / h); h = MAX_DIM }
     }
     canvas.width = w
     canvas.height = h
@@ -152,84 +166,73 @@ export function Scan() {
       console.log('2. Uploading to Supabase...')
       const { error: uploadError } = await supabase.storage
         .from('receipts')
-        .upload(filename, capturedBlob, {
-          contentType: 'image/jpeg',
-          upsert: false,
-        })
+        .upload(filename, capturedBlob, { contentType: 'image/jpeg', upsert: false })
 
-      if (uploadError) {
-        throw new Error(uploadError.message)
+      if (uploadError) throw new Error(uploadError.message)
+
+      const { data: { publicUrl } } = supabase.storage.from('receipts').getPublicUrl(filename)
+
+      let parsedItems: ParsedLineItem[] = []
+      let rawText = ''
+
+      if (USE_GEMINI) {
+        console.log('3. Parsing with Gemini Vision...')
+        parsedItems = await parseWithGemini(publicUrl)
+        rawText = parsedItems.map((i) => i.item_name).join('\n')
+        setOcrText(rawText || null)
+      } else {
+        console.log('3. Starting Tesseract OCR...')
+        const Tesseract = await import('tesseract.js')
+        const { data: { text } } = await Tesseract.default.recognize(capturedBlob, 'eng', {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              console.log(`OCR progress: ${(m.progress * 100).toFixed(0)}%`)
+            }
+          },
+        })
+        console.log('4. OCR Complete.')
+        rawText = text || ''
+        setOcrText(rawText || null)
+        parsedItems = parseReceiptLines(rawText)
       }
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from('receipts').getPublicUrl(filename)
-
-      console.log('3. Starting OCR Worker...')
-      const {
-        data: { text },
-      } = await Tesseract.recognize(capturedBlob, 'eng', {
-        logger: (m) => {
-          if (m.status === 'recognizing text') {
-            console.log(`OCR progress: ${(m.progress * 100).toFixed(0)}%`)
-          } else {
-            console.log(
-              'OCR:',
-              m.status,
-              m.progress != null ? `(${(m.progress * 100).toFixed(0)}%)` : ''
-            )
-          }
-        },
-      })
-
-      console.log('4. OCR Complete. Raw text:', text)
-      setOcrText(text || null)
-
-      const { store_name, store_type } = extractStoreFromOcr(text || '')
+      const { store_name, store_type } = extractStoreFromOcr(rawText)
 
       const { data: scanData, error: insertError } = await supabase
         .from('receipt_scans')
         .insert({
           user_id: user.id,
           image_url: publicUrl,
-          raw_text: text || '',
+          raw_text: rawText,
           store_name: store_name ?? undefined,
-          store_type: store_type,
+          store_type,
         })
         .select('id')
         .single()
 
-      if (insertError) {
-        console.warn('receipt_scans insert warning:', insertError)
-      }
+      if (insertError) console.warn('receipt_scans insert warning:', insertError)
 
       const receiptScanId = scanData?.id
-      let parsedItems: ParsedLineItem[] = []
 
-      if (receiptScanId && text) {
-        parsedItems = parseReceiptLines(text)
+      if (receiptScanId && parsedItems.length > 0) {
         const { error: pricesError } = await savePricesToSupabase(
           parsedItems,
           receiptScanId,
           store_name ?? undefined
         )
-        if (pricesError) {
-          console.warn('prices insert warning:', pricesError)
-        }
+        if (pricesError) console.warn('prices insert warning:', pricesError)
 
         setStatus('scanning_market')
         const comps = await fetchCompetitorPrices(parsedItems)
         setComparisons(comps)
 
         const { credits } = await awardCredits(receiptScanId)
-        if (credits > 0) {
-          showToast(`Success! +${credits} ClearCredits added`)
-        }
+        if (credits > 0) showToast(`Success! +${credits} ClearCredits added`)
       }
 
       setStatus('done')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload or OCR failed.')
+      setError(err instanceof Error ? err.message : 'Upload or scan failed.')
       setStatus('error')
     } finally {
       uploadingRef.current = false
@@ -238,8 +241,8 @@ export function Scan() {
 
   return (
     <div className="flex flex-col items-center px-6 py-8">
-      <h2 className="text-xl font-bold text-gray-900">Scan Receipt</h2>
-      <p className="mt-1 text-sm text-gray-600">
+      <h2 className="font-display text-3xl font-semibold text-midnight-navy">Scan Receipt</h2>
+      <p className="mt-1 text-sm text-midnight-navy/60">
         Take a photo of your receipt to extract prices.
       </p>
 
@@ -247,7 +250,7 @@ export function Scan() {
         <button
           type="button"
           onClick={startCamera}
-          className="mt-8 w-full max-w-sm rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+          className="mt-8 w-full max-w-sm rounded-xl bg-sunset-red px-4 py-4 font-display text-lg font-semibold tracking-wide text-white transition-colors hover:bg-sunset-red/90 focus:outline-none focus:ring-2 focus:ring-sunset-red focus:ring-offset-2"
         >
           Take Photo
         </button>
@@ -260,23 +263,20 @@ export function Scan() {
             autoPlay
             playsInline
             muted
-            className="aspect-[4/3] w-full rounded-lg border border-gray-200 bg-black object-cover"
+            className="aspect-[4/3] w-full rounded-xl border border-midnight-navy/10 bg-black object-cover"
           />
           <div className="mt-4 flex gap-3">
             <button
               type="button"
               onClick={capturePhoto}
-              className="flex-1 rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white hover:bg-emerald-700"
+              className="flex-1 rounded-xl bg-sunset-red px-4 py-3 font-display font-semibold text-white hover:bg-sunset-red/90"
             >
               Capture
             </button>
             <button
               type="button"
-              onClick={() => {
-                stopCamera()
-                setStatus('idle')
-              }}
-              className="rounded-lg border border-gray-200 bg-white px-4 py-3 font-medium text-gray-700 hover:bg-gray-50"
+              onClick={() => { stopCamera(); setStatus('idle') }}
+              className="rounded-xl border border-midnight-navy/20 bg-white px-4 py-3 font-medium text-midnight-navy hover:bg-midnight-navy/5"
             >
               Cancel
             </button>
@@ -289,20 +289,20 @@ export function Scan() {
           <img
             src={previewUrl}
             alt="Receipt preview"
-            className="aspect-[4/3] w-full rounded-lg border border-gray-200 object-cover"
+            className="aspect-[4/3] w-full rounded-xl border border-midnight-navy/10 object-cover"
           />
           <div className="mt-4 flex gap-3">
             <button
               type="button"
               onClick={uploadAndOcr}
-              className="flex-1 rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white hover:bg-emerald-700"
+              className="flex-1 rounded-xl bg-sunset-red px-4 py-3 font-display font-semibold text-white hover:bg-sunset-red/90"
             >
-              Upload & Scan
+              Upload &amp; Scan
             </button>
             <button
               type="button"
               onClick={retake}
-              className="rounded-lg border border-gray-200 bg-white px-4 py-3 font-medium text-gray-700 hover:bg-gray-50"
+              className="rounded-xl border border-midnight-navy/20 bg-white px-4 py-3 font-medium text-midnight-navy hover:bg-midnight-navy/5"
             >
               Retake
             </button>
@@ -312,16 +312,14 @@ export function Scan() {
 
       {status === 'uploading' && (
         <div className="mt-8 text-center">
-          <p className="text-gray-600">Uploading and extracting text...</p>
+          <p className="text-midnight-navy/70">Uploading and extracting text...</p>
         </div>
       )}
 
       {status === 'scanning_market' && (
         <div className="mt-8 text-center">
-          <p className="text-gray-600">Scanning Market...</p>
-          <p className="mt-1 text-sm text-gray-500">
-            Comparing prices with Superstore
-          </p>
+          <p className="text-midnight-navy/70">Scanning Market...</p>
+          <p className="mt-1 text-sm text-midnight-navy/50">Comparing prices</p>
         </div>
       )}
 
@@ -334,9 +332,9 @@ export function Scan() {
           <ComparisonCard comparisons={comparisons} />
 
           {ocrText && (
-            <div className="mt-4 max-h-24 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-left">
-              <p className="text-xs font-medium text-gray-500">Raw OCR (preview)</p>
-              <p className="mt-1 text-xs text-gray-700">
+            <div className="mt-4 max-h-24 overflow-y-auto rounded-xl border border-midnight-navy/10 bg-white p-3 text-left">
+              <p className="text-xs font-semibold text-midnight-navy/40">Raw OCR (preview)</p>
+              <p className="mt-1 text-xs text-midnight-navy/70">
                 {ocrText.length > 200 ? `${ocrText.slice(0, 200)}...` : ocrText}
               </p>
             </div>
@@ -345,7 +343,7 @@ export function Scan() {
           <button
             type="button"
             onClick={retake}
-            className="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+            className="mt-4 w-full rounded-xl bg-sunset-red px-4 py-3 font-display font-semibold text-white hover:bg-sunset-red/90"
           >
             Scan Another
           </button>
@@ -354,13 +352,13 @@ export function Scan() {
 
       {status === 'error' && error && (
         <div className="mt-6 w-full max-w-sm">
-          <p className="text-sm text-red-600" role="alert">
+          <p className="rounded-xl bg-sunset-red/10 p-3 text-sm text-sunset-red" role="alert">
             {error}
           </p>
           <button
             type="button"
             onClick={() => setStatus('idle')}
-            className="mt-4 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="mt-4 w-full rounded-xl border border-midnight-navy/20 bg-white px-4 py-3 font-medium text-midnight-navy hover:bg-midnight-navy/5"
           >
             Try Again
           </button>

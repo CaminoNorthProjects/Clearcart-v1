@@ -4,28 +4,44 @@ import {
   ADVOCACY_THRESHOLD_PERCENT,
 } from '../lib/compare'
 import { useToast } from '../contexts/ToastContext'
+import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 
 interface ComparisonCardProps {
   comparisons: PriceComparison[]
+  receiptScanId?: string
 }
 
-export function ComparisonCard({ comparisons }: ComparisonCardProps) {
+export function ComparisonCard({ comparisons, receiptScanId }: ComparisonCardProps) {
   const [sharedItems, setSharedItems] = useState<Set<number>>(new Set())
   const { showToast } = useToast()
+  const { user } = useAuth()
 
   if (comparisons.length === 0) return null
 
-  const handleShare = (index: number) => {
+  const handleShare = async (index: number, c: PriceComparison) => {
     setSharedItems((prev) => new Set(prev).add(index))
+
+    if (user) {
+      const { error } = await supabase.from('flagged_prices').insert({
+        price_id: receiptScanId ?? null,
+        user_id: user.id,
+        store_name: c.store_name ?? null,
+        item_name: c.item_name,
+        flagged_price: c.receipt_price,
+      })
+      if (error) console.warn('Flag insert warning:', error)
+    }
+
     showToast('Price flagged for the Vancouver community')
   }
 
   return (
-    <div className="mt-4 max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50">
-      <div className="sticky top-0 border-b border-gray-200 bg-gray-100 px-3 py-2 text-xs font-medium text-gray-600">
+    <div className="mt-4 max-h-64 overflow-y-auto rounded-xl border border-midnight-navy/10 bg-white">
+      <div className="sticky top-0 border-b border-midnight-navy/10 bg-cream px-3 py-2 text-xs font-semibold uppercase tracking-wide text-midnight-navy/50">
         Comparison List
       </div>
-      <ul className="divide-y divide-gray-200">
+      <ul className="divide-y divide-midnight-navy/10">
         {comparisons.map((c, i) => {
           const isSavings = c.competitor_price != null && c.savings > 0
           const overMarketPercent =
@@ -42,20 +58,20 @@ export function ComparisonCard({ comparisons }: ComparisonCardProps) {
               : ''
 
           return (
-            <li key={i} className={`px-3 py-2 ${rowBg}`}>
-              <p className="text-sm font-medium text-gray-900">{c.item_name}</p>
+            <li key={i} className={`px-3 py-2.5 ${rowBg}`}>
+              <p className="text-sm font-medium text-midnight-navy">{c.item_name}</p>
               <div className="mt-1 flex items-center justify-between text-xs">
-                <span className="text-gray-600">
+                <span className="text-midnight-navy/60">
                   You paid: ${c.receipt_price.toFixed(2)}
                 </span>
                 {c.competitor_price != null ? (
                   <span
                     className={
                       isSavings
-                        ? 'font-medium text-emerald-600'
+                        ? 'font-semibold text-emerald-600'
                         : isQuestionable
-                          ? 'font-medium text-amber-600'
-                          : 'text-gray-500'
+                          ? 'font-semibold text-amber-600'
+                          : 'text-midnight-navy/50'
                     }
                   >
                     {isSavings
@@ -65,20 +81,18 @@ export function ComparisonCard({ comparisons }: ComparisonCardProps) {
                         : `${c.store_name}: $${c.competitor_price.toFixed(2)}`}
                   </span>
                 ) : (
-                  <span className="text-gray-400">—</span>
+                  <span className="text-midnight-navy/30">—</span>
                 )}
               </div>
               {isQuestionable && (
                 <div className="mt-2">
                   <button
                     type="button"
-                    onClick={() => handleShare(i)}
+                    onClick={() => handleShare(i, c)}
                     disabled={sharedItems.has(i)}
-                    className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                    className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60"
                   >
-                    {sharedItems.has(i)
-                      ? 'Flagged for community (simulated)'
-                      : 'Share to Community'}
+                    {sharedItems.has(i) ? 'Flagged ✓' : 'Share to Community'}
                   </button>
                 </div>
               )}
